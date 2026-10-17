@@ -78,6 +78,10 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 /* Thẻ số dư */
 .balance{background:var(--surface);border-radius:20px;padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
 .balance .big{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.1;word-break:break-word}
+.balance .nw{display:flex;flex-direction:column;gap:6px;font-size:13.5px;border-top:1px solid var(--line);padding-top:10px}
+.balance .nw > div{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.balance .nw span{color:var(--muted)}
+.balance .nw b{font-weight:700;white-space:nowrap}
 .balance .pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .balance .pair > div{border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;min-width:0;background:var(--surface-2)}
 .balance .pair b{display:block;font-size:16px;word-break:break-word}
@@ -178,9 +182,6 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .empty .art svg{width:46px;height:46px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 
 /* Báo cáo */
-.chart{width:100%;height:auto;display:block}
-.chart text{fill:var(--muted);font-size:11px;font-family:var(--f)}
-.chart .vlbl{font-size:8.5px;font-weight:700}
 .mtable{display:flex;flex-direction:column;font-size:13px;border-top:1px solid var(--line);padding-top:6px}
 .mt-h,.mt-r{display:grid;grid-template-columns:40px 1fr 1fr;gap:2px 8px;align-items:center;padding:7px 6px;text-align:right}
 .mt-r .mt-d{grid-column:2/-1;font-size:11.5px;color:var(--muted);font-weight:500}
@@ -190,8 +191,6 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .mt-r span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .mt-r.cur{background:var(--accent-soft)}
 .mt-t{border-top:1px solid var(--line);border-radius:0;margin-top:2px;font-weight:800}
-.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted)}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 .catrow{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;align-items:center}
 .catrow .nm{font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .catrow .bar{grid-column:2/-1;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
@@ -220,11 +219,9 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 @keyframes spinIn{from{opacity:0;transform:rotate(-200deg) scale(.85)}to{opacity:1;transform:rotate(-90deg)}}
 @keyframes pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
 @keyframes toastIn{from{opacity:0;transform:translate(-50%,16px) scale(.96)}to{opacity:1;transform:translate(-50%,0)}}
-@keyframes barUp{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 #view.enter > *{animation:rise .42s var(--ease-out) both;animation-delay:calc(var(--i,0) * 55ms)}
 #view.enter .catrow .bar i{animation:grow .7s var(--ease-out) both;transform-origin:left;animation-delay:.18s}
 #view.enter .donut svg{animation:spinIn .8s var(--ease-out) both;animation-delay:.1s}
-#view.enter .chart rect{animation:barUp .6s var(--ease-out) both;transform-box:fill-box;transform-origin:bottom;animation-delay:.15s}
 #view.enter .catgrid .catbtn .ico,#view.enter .hscroll .wcard{animation:pop .4s var(--ease-spring) both;animation-delay:calc(.12s + var(--j,0) * 22ms)}
 .toast.show{animation:toastIn .32s var(--ease-spring) both}
 /* phản hồi khi chạm: nút lún nhẹ rồi bật lại */
@@ -383,6 +380,15 @@ function balances(){
   }
   return b;
 }
+/* nợ theo hạng mục: "Đi vay" (thu) trừ "Trả nợ" (chi) là đang nợ; "Cho vay" (chi) trừ "Thu nợ" (thu) là người khác nợ mình */
+function debtKind(c){ if(!c) return null; const s=strip(c.name)+" | "+strip(c.parent||"");
+  if (/\bdi vay\b|^vay\b/.test(s)) return "borrow"; if (/\btra no\b/.test(s)) return "repay";
+  if (/\bcho vay\b/.test(s)) return "lend"; if (/\bthu no\b/.test(s)) return "collect"; return null; }
+function debts(){
+  const k={borrow:0,repay:0,lend:0,collect:0};
+  for (const t of S.txs){ if(t.kind==="transfer") continue; const d=debtKind(catById(t.categoryId)); if(d) k[d]+=Number(t.amount)||0; }
+  return { owe:Math.max(0,k.borrow-k.repay), owed:Math.max(0,k.lend-k.collect) };
+}
 function monthTotals(ym){ let inc=0, exp=0; for (const t of S.txs){ if (ymOf(t.date)!==ym) continue; if(t.kind==="income") inc+=+t.amount; else if(t.kind==="expense") exp+=+t.amount; } return {inc, exp}; }
 function byCategory(ym, kind){ const m={}; S.txs.forEach(t=>{ if(t.kind===kind && ymOf(t.date)===ym) m[t.categoryId]=(m[t.categoryId]||0)+(+t.amount); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); }
 const sortTx = arr => arr.slice().sort((a,b)=> a.date===b.date ? (b.createdAt||0)-(a.createdAt||0) : (a.date<b.date?1:-1));
@@ -487,9 +493,15 @@ function homeView(){
   const ym = ymOf(todayStr()); const {inc,exp} = monthTotals(ym);
   const recent = sortTx(S.txs).slice(0,5);
   const rows = byCategory(ym,"expense");
+  const {owe,owed} = debts(); const hasDebt = owe>0 || owed>0, net = total-owe+owed;
   $("#view").innerHTML = `
   <section class="balance" aria-label="Tổng số dư">
-    <div><div class="label">Tổng số dư</div><div class="big num ${total<0?"out-c":""}">${money(total)}</div></div>
+    ${hasDebt ? `<div><div class="label">Tài sản ròng (đã trừ nợ)</div><div class="big num ${net<0?"out-c":""}">${money(net)}</div></div>
+    <div class="nw">
+      <div><span>Tiền trong các ví</span><b class="num">${money(total)}</b></div>
+      ${owe?`<div><span>Đi vay chưa trả</span><b class="num out-c">−${money(owe)}</b></div>`:""}
+      ${owed?`<div><span>Cho vay chưa thu</span><b class="num in-c">+${money(owed)}</b></div>`:""}
+    </div>` : `<div><div class="label">Tổng số dư</div><div class="big num ${total<0?"out-c":""}">${money(total)}</div></div>`}
     <div class="pair">
       <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Thu tháng ${Number(ym.slice(5))}</span><b class="num in-c">${fmt(inc)}</b></span></div>
       <div><span class="arrow" style="background:var(--expense)">${ARROW_OUT}</span><span style="min-width:0"><span>Chi tháng ${Number(ym.slice(5))}</span><b class="num out-c">${fmt(exp)}</b></span></div>
@@ -612,19 +624,6 @@ function reportView(){
   const kind = S.repKind||"expense";
   const N=12; const months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(S.month,-i));
   const data = months.map(m=>({m, ...monthTotals(m)}));
-  const nice = niceMax(Math.max(1, ...data.map(d=>Math.max(d.inc,d.exp))));
-  // chừa 30% phía trên cho nhãn số tiền dựng đứng trên đầu cột
-  const W=360,H=250,L=40,B=24,T=10, cw=(W-L-6)/N, bw=Math.max(4,Math.min(12,cw/2-2)), top=nice*1.3;
-  const y = v => T + (H-T-B) * (1 - v/top);
-  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Thu và chi ${N} tháng">`;
-  [0,nice/2,nice].forEach(t=>{ svg+=`<line x1="${L}" x2="${W-4}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${y(t)+4}" text-anchor="end">${shortMoney(t)}</text>`; });
-  const lbl=(x,v,c)=> v>0 ? `<text class="vlbl" x="${x}" y="${y(v)-4}" transform="rotate(-90 ${x} ${y(v)-4})" dy="3" style="fill:${c}">${shortMoney(v)}</text>` : "";
-  data.forEach((d,i)=>{ const cx=L+cw*i+cw/2; const cur=d.m===S.month; const xi=cx-bw/2-1, xe=cx+bw/2+1;
-    svg+=`<rect x="${cx-bw-1}" y="${y(d.inc)}" width="${bw}" height="${Math.max(0,y(0)-y(d.inc))}" rx="2.5" fill="var(--income)" opacity="${cur?1:.5}"/>`;
-    svg+=`<rect x="${cx+1}" y="${y(d.exp)}" width="${bw}" height="${Math.max(0,y(0)-y(d.exp))}" rx="2.5" fill="var(--expense)" opacity="${cur?1:.5}"/>`;
-    svg+=lbl(xi,d.inc,"var(--income)")+lbl(xe,d.exp,"var(--expense)");
-    svg+=`<text x="${cx}" y="${H-6}" text-anchor="middle" style="${cur?"fill:var(--fg);font-weight:700":""}">T${Number(d.m.slice(5))}</text>`; });
-  svg+=`</svg>`;
   const sumI=data.reduce((s,d)=>s+d.inc,0), sumE=data.reduce((s,d)=>s+d.exp,0);
   const diffCls=v=>v<0?"out-c":"in-c", sign=v=>(v<0?"−":"+")+fmt(Math.abs(v));
   const table=`<div class="mtable">
@@ -641,12 +640,11 @@ function reportView(){
   </section>
   ${rows.length?`<section class="card"><h2>${kind==="income"?"Thu":"Chi"} theo hạng mục</h2>${rows.map(([id,v])=>{ const c=catById(id); const p=total?v/total*100:0;
     return `<div class="catrow" style="--c:${catColor(c)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b>${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span></span><div class="bar"><i style="width:${p}%"></i></div></div>`; }).join("")}</section>`:""}
-  <section class="card"><div class="row between"><h2>Thu chi ${N} tháng</h2><div class="legend"><span><i style="background:var(--income)"></i>Thu</span><span><i style="background:var(--expense)"></i>Chi</span></div></div>${svg}${table}</section>`;
+  <section class="card"><h2>Thu chi ${N} tháng</h2>${table}</section>`;
   bindMonthBar();
   document.querySelectorAll("[data-ym]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.ym; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-rk]").forEach(b=>b.onclick=()=>{ S.repKind=b.dataset.rk; reportView(); });
 }
-function niceMax(v){ const p=Math.pow(10,Math.floor(Math.log10(v))); for(const m of [1,2,2.5,5,10]) if(m*p>=v) return m*p; return 10*p; }
 function shortMoney(v){ if(v>=1e9) return (v/1e9).toLocaleString("vi-VN",{maximumFractionDigits:1})+" tỷ"; if(v>=1e6) return (v/1e6).toLocaleString("vi-VN",{maximumFractionDigits:1})+" tr"; if(v>=1e3) return (v/1e3).toLocaleString("vi-VN",{maximumFractionDigits:0})+"k"; return String(Math.round(v)); }
 
 /* ---------- Cài đặt ---------- */
