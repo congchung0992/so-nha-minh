@@ -129,6 +129,16 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .leg button.r:active{opacity:.6}
 @keyframes flash{0%,100%{background:transparent}30%{background:var(--accent-soft)}}
 .flash{animation:flash 1.2s ease;border-radius:12px}
+/* thu = xanh, chi = đỏ: số tiền đặt trên nền nhạt cùng tông */
+.tx .amt.in-c,.tx .amt.out-c,.tx .amt.tr-c{padding:3px 9px;border-radius:9px;background:color-mix(in srgb,currentColor 13%,transparent)}
+.catrow b.in-c,.catrow b.out-c{font-weight:800}
+.dayhead .num.in-c,.dayhead .num.out-c{font-weight:700}
+.seg.plain button[data-k="expense"][aria-pressed="true"]{background:var(--expense);color:#fff}
+.seg.plain button[data-k="income"][aria-pressed="true"]{background:var(--income);color:#fff}
+.kindhead.k-expense .amountbox{background:color-mix(in srgb,var(--expense) 10%,var(--surface-2))}
+.kindhead.k-income .amountbox{background:color-mix(in srgb,var(--income) 10%,var(--surface-2))}
+.kindhead.k-transfer .amountbox{background:color-mix(in srgb,var(--transfer) 10%,var(--surface-2))}
+.kindhead .amountbox{transition:background-color .25s}
 .mergebox{display:flex;flex-direction:column;gap:8px;padding:10px;margin:2px 0 8px;border-radius:12px;background:var(--surface-2)}
 /* chi tiêu 6 tháng: mỗi tháng một thanh ngang chia màu */
 .trend{display:flex;flex-direction:column;gap:8px}
@@ -569,7 +579,7 @@ function debtView(type){
   </section>
   <section class="card" style="gap:4px"><h2>${list.length} khoản ${owe?"vay và trả nợ":"cho vay và thu nợ"}</h2>
     <div class="list-plain debtlist">${list.map(t=>{ const c=catById(t.categoryId), inc=t.kind==="income";
-      return `<button class="tx" data-id="${esc(t.id)}">${icoHTML(catIconKey(c))}<div class="mid"><div class="t">${esc(t.note||c?.name||"")}</div><div class="s">${viDate(t.date)} · ${esc(c?.name||"")}</div></div><div class="amt num ${inc?"in-c":""}">${inc?"+":"−"}${fmt(t.amount)}</div></button>`; }).join("")}</div>
+      return `<button class="tx" data-id="${esc(t.id)}">${icoHTML(catIconKey(c))}<div class="mid"><div class="t">${esc(t.note||c?.name||"")}</div><div class="s">${viDate(t.date)} · ${esc(c?.name||"")}</div></div><div class="amt num ${inc?"in-c":"out-c"}">${inc?"+":"−"}${fmt(t.amount)}</div></button>`; }).join("")}</div>
     <p class="small muted" style="margin:6px 0 0">${owe?"Khi trả nợ, ghi một khoản <b>chi</b> vào hạng mục có chữ “Trả nợ” để số nợ giảm.":"Khi được trả, ghi một khoản <b>thu</b> vào hạng mục “Thu nợ” để số tiền cho vay giảm."} Bấm vào từng khoản để sửa.</p>
   </section>`;
   $("#back").onclick=()=>{ S.homeSub=null; render(); window.scrollTo(0,0); };
@@ -613,7 +623,7 @@ function walletTxView(id){
   <section class="balance"><div class="row">${icoHTML(walletIconKey(w),"lg")}<div style="min-width:0"><div class="label">${esc(w.name)}</div><div class="big num ${bal<0?"out-c":""}">${money(bal)}</div></div></div>
     <div class="nw"><div><span>Số dư ban đầu</span><b class="num">${money(Number(w.initial)||0)}</b></div><div><span>Số khoản</span><b class="num">${lines.length}</b></div></div></section>
   ${lines.length ? Object.keys(groups).map(d=>`<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span></div><div class="list-plain">${groups[d].map(l=>{ const c=catById(l.t.categoryId);
-      return `<button class="tx" data-id="${esc(l.t.id)}">${icoHTML(l.t.kind==="transfer"?"transfer":catIconKey(c))}<div class="mid"><div class="t">${esc(l.title)}</div><div class="s">${esc(l.t.note||"")}${l.t.note?" · ":""}còn ${money(l.bal)}</div></div><div class="amt num ${l.d>0?"in-c":""}">${l.d>0?"+":"−"}${fmt(Math.abs(l.d))}</div></button>`; }).join("")}</div></section>`).join("")
+      return `<button class="tx" data-id="${esc(l.t.id)}">${icoHTML(l.t.kind==="transfer"?"transfer":catIconKey(c))}<div class="mid"><div class="t">${esc(l.title)}</div><div class="s">${esc(l.t.note||"")}${l.t.note?" · ":""}còn ${money(l.bal)}</div></div><div class="amt num ${l.d>0?"in-c":"out-c"}">${l.d>0?"+":"−"}${fmt(Math.abs(l.d))}</div></button>`; }).join("")}</div></section>`).join("")
     : `<div class="card">${emptyTx("Ví này chưa có giao dịch","Khi ghi chép chọn ví này, các khoản sẽ hiện ở đây.")}</div>`}`;
   $("#back").onclick=()=>{ S.homeSub="wallets"; render(); window.scrollTo(0,0); };
   bindTxRows();
@@ -720,7 +730,7 @@ function txRow(t){
   const c = catById(t.categoryId), w = walletById(t.walletId), w2 = walletById(t.toWalletId);
   const title = t.kind==="transfer" ? "Chuyển tiền" : (c?.name || "Không rõ hạng mục");
   const sub = [t.note, t.kind==="transfer" ? `${w?.name||"?"} → ${w2?.name||"?"}` : (w?.name||""), byName(t.by)].filter(Boolean).join(" · ");
-  const cls = t.kind==="income"?"in-c":t.kind==="expense"?"":"tr-c";
+  const cls = t.kind==="income"?"in-c":t.kind==="expense"?"out-c":"tr-c";
   const sign = t.kind==="income"?"+":t.kind==="expense"?"−":"";
   return `<button class="tx" data-id="${esc(t.id)}">${icoHTML(t.kind==="transfer"?"transfer":catIconKey(c))}<div class="mid"><div class="t">${esc(title)}</div><div class="s">${esc(sub)}</div></div><div class="amt num ${cls}">${sign}${fmt(t.amount)}</div></button>`;
 }
@@ -806,7 +816,7 @@ function bookView(){
     </section>`; })() : ""}
   ${list.length ? `<div class="listhead"><h2>${list.length} khoản trong tháng</h2></div>` : ""}
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const net=g.reduce((s,t)=>s+(t.kind==="income"?+t.amount:t.kind==="expense"?-t.amount:0),0);
-    return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num">${net<0?"−":"+"}${fmt(Math.abs(net))}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
+    return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num ${net<0?"out-c":"in-c"}">${net<0?"−":"+"}${fmt(Math.abs(net))}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
     : `<div class="card">${emptyTx("Tháng này chưa có ghi chép","Chuyển sang tháng khác hoặc bấm + để ghi.")}</div>`}`;
   bindMonthBar(); bindTxRows();
   const br=$("#bkReport"); if(br) br.onclick=()=>{ S.repKind="expense"; setTab("report"); };
@@ -823,7 +833,7 @@ function formView(){
   const opt = sel=>ws.map(w=>`<option value="${esc(w.id)}" ${w.id===sel?"selected":""}>${esc(w.name)}</option>`).join("");
   const kc = f.kind==="income"?"in-c":f.kind==="expense"?"out-c":"tr-c";
   $("#view").innerHTML = `
-  <section class="kindhead">
+  <section class="kindhead k-${f.kind}">
     <div class="row between"><h2>${editing?"Sửa ghi chép":"Ghi chép mới"}</h2>${editing?`<span class="small muted">Người nhập: ${esc(byName(f.by))}</span>`:""}</div>
     ${ro?`<div class="note">Bạn đang chỉ có quyền xem sổ này.</div>`:""}
     <div class="seg" role="group" aria-label="Loại">${[["expense","Chi tiền"],["income","Thu tiền"],["transfer","Chuyển ví"]].map(([k,l])=>`<button data-k="${k}" aria-pressed="${f.kind===k}">${l}</button>`).join("")}</div>
@@ -906,7 +916,7 @@ function partyDetailView(){
     <div><span>Chiếm trong ${kind==="income"?"tổng thu":"tổng chi"} ${monthLabel(S.month).toLowerCase()}</span><b class="num">${all?(sum/all*100).toFixed(1).replace(".",","):0}%</b></div>
     ${Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`<div><span>· ${esc(n)}</span><b class="num">${fmt(v)}</b></div>`).join("")}</div></section>
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const tot=g.reduce((s,t)=>s+(+t.amount),0);
-    return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num">${kind==="income"?"+":"−"}${fmt(tot)}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
+    return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num ${kind==="income"?"in-c":"out-c"}">${kind==="income"?"+":"−"}${fmt(tot)}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
     : `<div class="card">${emptyTx("Tháng này không có khoản nào","Chuyển sang tháng khác bằng nút ‹ ›.")}</div>`}`;
   $("#back").onclick=()=>{ S.repParty=null; render(); window.scrollTo(0,0); };
   bindMonthBar(); bindTxRows();
@@ -928,15 +938,15 @@ function reportView(){
   const rows=byCategory(S.month,kind); const total=kind==="income"?inc:exp;
   $("#view").innerHTML = `${monthBar()}
   <section class="card">
-    <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rk="expense" aria-pressed="${kind==="expense"}">Chi tiền</button><button data-rk="income" aria-pressed="${kind==="income"}">Thu tiền</button></div>
+    <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rk="expense" data-k="expense" aria-pressed="${kind==="expense"}">Chi tiền</button><button data-rk="income" data-k="income" aria-pressed="${kind==="income"}">Thu tiền</button></div>
     <div class="donutwrap">${donut(rows,total,`${kind==="income"?"Tổng thu":"Tổng chi"}<b class="num">${shortMoney(total)}</b>`)}${legend(rows,total,6).replace("Chưa có khoản chi nào",kind==="income"?"Chưa có khoản thu nào":"Chưa có khoản chi nào")}</div>
   </section>
   ${rows.length?`<section class="card">
     <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rg="cat" aria-pressed="${group==="cat"}">Theo hạng mục</button><button data-rg="party" aria-pressed="${group==="party"}">${kind==="income"?"Theo người chuyển":"Theo người nhận"}</button></div>
     ${group==="cat" ? rows.map(([id,v],i)=>{ const c=catById(id); const p=total?v/total*100:0;
-    return `<button class="catrow" data-catd="${esc(id)}" style="--c:${rankColor(i)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b>${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")
+    return `<button class="catrow" data-catd="${esc(id)}" style="--c:${rankColor(i)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b class="${kind==="income"?"in-c":"out-c"}">${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")
     : byParty(S.month,kind).map(([name,v,n],i)=>{ const p=total?v/total*100:0;
-    return `<button class="catrow" data-party="${esc(name)}" style="--c:${rankColor(i)}"><span class="ico sm av" style="--c:${rankColor(i)}">${esc(initials(name))}</span><span class="nm">${esc(name||partyNone(kind))}</span><span class="num small"><b>${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")}
+    return `<button class="catrow" data-party="${esc(name)}" style="--c:${rankColor(i)}"><span class="ico sm av" style="--c:${rankColor(i)}">${esc(initials(name))}</span><span class="nm">${esc(name||partyNone(kind))}</span><span class="num small"><b class="${kind==="income"?"in-c":"out-c"}">${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")}
   </section>`:""}
   <section class="card"><h2>Thu chi ${N} tháng</h2>${table}<p class="small muted" style="margin:0">Chỉ tính tiền thật sự kiếm được và tiêu mất. Không tính chuyển giữa các ví, đi vay, cho vay, trả nợ, thu nợ và điều chỉnh số dư. Các khoản này vẫn có trong sổ và số dư ví.</p></section>`;
   bindMonthBar();
@@ -964,7 +974,7 @@ function catDetailView(){
     ${c && kind==="expense" ? `<div class="field"><span class="flabel">Loại chi phí ${c.fixed===""||c.fixed==null?"<span class='muted'>(app đang tự đoán)</span>":""}</span>
       <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-fx="1" aria-pressed="${isFixedCat(c)}">Cố định hằng tháng</button><button data-fx="0" aria-pressed="${!isFixedCat(c)}">Phát sinh</button></div></div>` : ""}</section>
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const tot=g.reduce((s,t)=>s+(+t.amount),0);
-    return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num">${kind==="income"?"+":"−"}${fmt(tot)}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
+    return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num ${kind==="income"?"in-c":"out-c"}">${kind==="income"?"+":"−"}${fmt(tot)}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
     : `<div class="card">${emptyTx("Tháng này không có khoản nào","Chuyển sang tháng khác bằng nút ‹ ›.")}</div>`}`;
   $("#back").onclick=()=>{ S.repCat=null; render(); window.scrollTo(0,0); };
   document.querySelectorAll("[data-fx]").forEach(b=>b.onclick=async()=>{ const fixed=b.dataset.fx==="1";
@@ -1529,7 +1539,7 @@ function tcbView(){
       <div class="small">Sẽ nhập <b>${p.items.length}</b> giao dịch${p.dupes?`, bỏ qua <b>${p.dupes}</b> giao dịch đã có`:""}${p.from?` · từ ${viDate(p.from)} đến ${viDate(p.to)}`:""}.</div>
       <div class="small muted">Tự xếp hạng mục ${p.guessed+p.learned}/${p.items.length} khoản${p.learned?` (${p.learned} khoản theo cách bạn đã xếp trước đây)`:""}${p.internal?`, ${p.internal} khoản chuyển giữa tài khoản (không tính thu chi)`:""}${other?`, ${other} khoản vào "Khác"`:""}. Bấm vào từng khoản trong sổ để đổi; lần nhập sau sẽ tự xếp theo.</div>
       ${p.newCats.length?`<p class="small muted" style="margin:0">Tạo thêm hạng mục: ${p.newCats.map(c=>esc(c.name)).join(", ")}</p>`:""}
-      <div class="list-plain">${p.items.slice(0,12).map(it=>`<div class="tx">${icoHTML(catIconKey(it.cat))}<div class="mid"><div class="t">${esc(it.note||it.cat.name)}</div><div class="s">${viDate(it.date)} · ${esc(it.cat.name)}</div></div><div class="amt num ${it.kind==="income"?"in-c":""}">${it.kind==="income"?"+":"−"}${fmt(it.amount)}</div></div>`).join("")}</div>
+      <div class="list-plain">${p.items.slice(0,12).map(it=>`<div class="tx">${icoHTML(catIconKey(it.cat))}<div class="mid"><div class="t">${esc(it.note||it.cat.name)}</div><div class="s">${viDate(it.date)} · ${esc(it.cat.name)}</div></div><div class="amt num ${it.kind==="income"?"in-c":"out-c"}">${it.kind==="income"?"+":"−"}${fmt(it.amount)}</div></div>`).join("")}</div>
       ${p.items.length>12?`<div class="small muted">… và ${p.items.length-12} giao dịch khác</div>`:""}
       <div class="err" id="iErr" role="alert"></div>
       <div class="btnrow"><button class="btn ghost" id="iCancel">Chọn file khác</button><button class="btn" id="iGo" ${p.items.length?"":"disabled"}>Nhập ${p.items.length} giao dịch</button></div>
@@ -1597,7 +1607,7 @@ function importView(){
       ${prev.guessed?`<div class="small muted">Tự xếp hạng mục được ${prev.guessed}/${prev.items.length} giao dịch; số còn lại vào "Khác", bạn bấm vào từng khoản trong sổ để đổi.</div>`:""}
       ${prev.skipped?`<div class="note">Bỏ qua ${prev.skipped} dòng không có ngày hoặc số tiền (dòng tiêu đề phụ, số dư đầu kỳ, tổng cộng…)${prev.transfers?`, trong đó ${prev.transfers} dòng chuyển khoản giữa ví`:""}.</div>`:""}
       ${prev.newCats.length||prev.newWallets.length?`<p class="small muted" style="margin:0">Sẽ tạo mới: ${[...prev.newWallets.map(n=>"ví "+n),...prev.newCats.map(c=>c.name)].map(esc).join(", ")}</p>`:""}
-      <div class="list-plain">${prev.items.slice(0,8).map(it=>`<div class="tx">${icoHTML(it.cat.icon||catIconKey(it.cat))}<div class="mid"><div class="t">${esc(it.catName)}</div><div class="s">${viDate(it.date)}${it.note?" · "+esc(it.note):""}</div></div><div class="amt num ${it.kind==="income"?"in-c":""}">${it.kind==="income"?"+":"−"}${fmt(it.amount)}</div></div>`).join("")}</div>
+      <div class="list-plain">${prev.items.slice(0,8).map(it=>`<div class="tx">${icoHTML(it.cat.icon||catIconKey(it.cat))}<div class="mid"><div class="t">${esc(it.catName)}</div><div class="s">${viDate(it.date)}${it.note?" · "+esc(it.note):""}</div></div><div class="amt num ${it.kind==="income"?"in-c":"out-c"}">${it.kind==="income"?"+":"−"}${fmt(it.amount)}</div></div>`).join("")}</div>
       ${prev.items.length>8?`<div class="small muted">… và ${prev.items.length-8} giao dịch khác</div>`:""}
       <div class="err" id="iErr" role="alert"></div>
       <div class="btnrow"><button class="btn ghost" id="iCancel">Chọn file khác</button><button class="btn" id="iGo" ${prev.items.length?"":"disabled"}>Nhập ${prev.items.length} giao dịch</button></div>
