@@ -180,6 +180,16 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 /* Báo cáo */
 .chart{width:100%;height:auto;display:block}
 .chart text{fill:var(--muted);font-size:11px;font-family:var(--f)}
+.chart .vlbl{font-size:8.5px;font-weight:700}
+.mtable{display:flex;flex-direction:column;font-size:13px;border-top:1px solid var(--line);padding-top:6px}
+.mt-h,.mt-r{display:grid;grid-template-columns:40px 1fr 1fr;gap:2px 8px;align-items:center;padding:7px 6px;text-align:right}
+.mt-r .mt-d{grid-column:2/-1;font-size:11.5px;color:var(--muted);font-weight:500}
+.mt-h>:first-child,.mt-r>:first-child{text-align:left}
+.mt-h{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.mt-r{background:none;border:0;width:100%;border-radius:10px;font-weight:600;white-space:nowrap}
+.mt-r span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.mt-r.cur{background:var(--accent-soft)}
+.mt-t{border-top:1px solid var(--line);border-radius:0;margin-top:2px;font-weight:800}
 .legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 .catrow{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;align-items:center}
@@ -600,18 +610,28 @@ async function saveForm(){
 /* ---------- Báo cáo ---------- */
 function reportView(){
   const kind = S.repKind||"expense";
-  const months=[]; for(let i=5;i>=0;i--) months.push(shiftYm(S.month,-i));
+  const N=12; const months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(S.month,-i));
   const data = months.map(m=>({m, ...monthTotals(m)}));
   const nice = niceMax(Math.max(1, ...data.map(d=>Math.max(d.inc,d.exp))));
-  const W=340,H=190,L=40,B=24,T=10, cw=(W-L-6)/6, bw=Math.min(14,cw/2-4);
-  const y = v => T + (H-T-B) * (1 - v/nice);
-  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Thu và chi 6 tháng">`;
+  // chừa 30% phía trên cho nhãn số tiền dựng đứng trên đầu cột
+  const W=360,H=250,L=40,B=24,T=10, cw=(W-L-6)/N, bw=Math.max(4,Math.min(12,cw/2-2)), top=nice*1.3;
+  const y = v => T + (H-T-B) * (1 - v/top);
+  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Thu và chi ${N} tháng">`;
   [0,nice/2,nice].forEach(t=>{ svg+=`<line x1="${L}" x2="${W-4}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${y(t)+4}" text-anchor="end">${shortMoney(t)}</text>`; });
-  data.forEach((d,i)=>{ const cx=L+cw*i+cw/2; const cur=d.m===S.month;
-    svg+=`<rect x="${cx-bw-1}" y="${y(d.inc)}" width="${bw}" height="${Math.max(0,y(0)-y(d.inc))}" rx="3" fill="var(--income)" opacity="${cur?1:.45}"/>`;
-    svg+=`<rect x="${cx+1}" y="${y(d.exp)}" width="${bw}" height="${Math.max(0,y(0)-y(d.exp))}" rx="3" fill="var(--expense)" opacity="${cur?1:.45}"/>`;
+  const lbl=(x,v,c)=> v>0 ? `<text class="vlbl" x="${x}" y="${y(v)-4}" transform="rotate(-90 ${x} ${y(v)-4})" dy="3" style="fill:${c}">${shortMoney(v)}</text>` : "";
+  data.forEach((d,i)=>{ const cx=L+cw*i+cw/2; const cur=d.m===S.month; const xi=cx-bw/2-1, xe=cx+bw/2+1;
+    svg+=`<rect x="${cx-bw-1}" y="${y(d.inc)}" width="${bw}" height="${Math.max(0,y(0)-y(d.inc))}" rx="2.5" fill="var(--income)" opacity="${cur?1:.5}"/>`;
+    svg+=`<rect x="${cx+1}" y="${y(d.exp)}" width="${bw}" height="${Math.max(0,y(0)-y(d.exp))}" rx="2.5" fill="var(--expense)" opacity="${cur?1:.5}"/>`;
+    svg+=lbl(xi,d.inc,"var(--income)")+lbl(xe,d.exp,"var(--expense)");
     svg+=`<text x="${cx}" y="${H-6}" text-anchor="middle" style="${cur?"fill:var(--fg);font-weight:700":""}">T${Number(d.m.slice(5))}</text>`; });
   svg+=`</svg>`;
+  const sumI=data.reduce((s,d)=>s+d.inc,0), sumE=data.reduce((s,d)=>s+d.exp,0);
+  const diffCls=v=>v<0?"out-c":"in-c", sign=v=>(v<0?"−":"+")+fmt(Math.abs(v));
+  const table=`<div class="mtable">
+    <div class="mt-h"><span>Tháng</span><span>Thu</span><span>Chi</span></div>
+    ${data.slice().reverse().map(d=>`<button class="mt-r${d.m===S.month?" cur":""}" data-ym="${d.m}"><span>${Number(d.m.slice(5))}/${d.m.slice(2,4)}</span><span class="num in-c">${d.inc?fmt(d.inc):"–"}</span><span class="num out-c">${d.exp?fmt(d.exp):"–"}</span>${d.inc||d.exp?`<span class="mt-d">Còn lại <b class="num ${diffCls(d.inc-d.exp)}">${sign(d.inc-d.exp)}</b></span>`:""}</button>`).join("")}
+    <div class="mt-r mt-t"><span>Cộng</span><span class="num in-c">${fmt(sumI)}</span><span class="num out-c">${fmt(sumE)}</span><span class="mt-d">Còn lại <b class="num ${diffCls(sumI-sumE)}">${sign(sumI-sumE)}</b></span></div>
+  </div>`;
   const {inc,exp}=monthTotals(S.month);
   const rows=byCategory(S.month,kind); const total=kind==="income"?inc:exp;
   $("#view").innerHTML = `${monthBar()}
@@ -621,8 +641,9 @@ function reportView(){
   </section>
   ${rows.length?`<section class="card"><h2>${kind==="income"?"Thu":"Chi"} theo hạng mục</h2>${rows.map(([id,v])=>{ const c=catById(id); const p=total?v/total*100:0;
     return `<div class="catrow" style="--c:${catColor(c)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b>${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span></span><div class="bar"><i style="width:${p}%"></i></div></div>`; }).join("")}</section>`:""}
-  <section class="card"><div class="row between"><h2>Thu chi 6 tháng</h2><div class="legend"><span><i style="background:var(--income)"></i>Thu</span><span><i style="background:var(--expense)"></i>Chi</span></div></div>${svg}</section>`;
+  <section class="card"><div class="row between"><h2>Thu chi ${N} tháng</h2><div class="legend"><span><i style="background:var(--income)"></i>Thu</span><span><i style="background:var(--expense)"></i>Chi</span></div></div>${svg}${table}</section>`;
   bindMonthBar();
+  document.querySelectorAll("[data-ym]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.ym; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-rk]").forEach(b=>b.onclick=()=>{ S.repKind=b.dataset.rk; reportView(); });
 }
 function niceMax(v){ const p=Math.pow(10,Math.floor(Math.log10(v))); for(const m of [1,2,2.5,5,10]) if(m*p>=v) return m*p; return 10*p; }
