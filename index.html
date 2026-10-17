@@ -86,6 +86,8 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .balance .nw .nwbtn span:first-child{flex:1}
 .balance .nw .nwbtn .chev{font-size:16px;line-height:1}
 .balance .nw .nwbtn:active{opacity:.6}
+.wlhead{background:none;border:0;width:100%;text-align:left;padding:0;color:inherit}
+.wlhead .chev{font-size:18px}
 .nw.wl{display:flex;flex-direction:column;gap:6px;font-size:13.5px;border-top:1px solid var(--line);padding-top:10px}
 .nw.wl > div{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .nw.wl span{color:var(--muted)} .nw.wl b{font-weight:700;white-space:nowrap}
@@ -542,7 +544,7 @@ function walletsDetailView(){
     <div><div class="label">Tiền trong các ví</div><div class="big num ${sum<0?"out-c":""}">${money(sum)}</div></div>
     <div class="nw">${rows.map(r=>`<div><span>${esc(r.w.name)}</span><b class="num ${bal[r.w.id]<0?"out-c":""}">${money(bal[r.w.id]||0)}</b></div>`).join("")}</div>
   </section>
-  ${rows.map(r=>`<section class="card"><div class="row">${icoHTML(walletIconKey(r.w),"lg")}<div style="min-width:0;flex:1"><h2>${esc(r.w.name)}</h2><div class="small muted">${r.n} giao dịch</div></div><b class="num ${bal[r.w.id]<0?"out-c":""}">${money(bal[r.w.id]||0)}</b></div>
+  ${rows.map(r=>`<section class="card"><button class="row wlhead" data-wl="${esc(r.w.id)}">${icoHTML(walletIconKey(r.w),"lg")}<div style="min-width:0;flex:1"><h2>${esc(r.w.name)}</h2><div class="small muted">${r.n} giao dịch · bấm để xem từng khoản</div></div><b class="num ${bal[r.w.id]<0?"out-c":""}">${money(bal[r.w.id]||0)}</b><span class="chev">›</span></button>
     <div class="nw wl">
       <div><span>Số dư ban đầu</span><b class="num">${money(r.initial)}</b></div>
       ${line("Tổng thu",r.inc,"in-c")}${line("Tổng chi",-r.exp,"out-c")}${line("Chuyển từ ví khác vào",r.tin,"in-c")}${line("Chuyển sang ví khác",-r.tout,"out-c")}
@@ -550,9 +552,30 @@ function walletsDetailView(){
     </div></section>`).join("")}
   <p class="small muted" style="margin:0 4px">Số dư ban đầu và tên ví sửa trong Cài đặt → Ví và tài khoản.</p>`;
   $("#back").onclick=()=>{ S.homeSub=null; render(); window.scrollTo(0,0); };
+  document.querySelectorAll("[data-wl]").forEach(b=>b.onclick=()=>{ S.homeSub="w:"+b.dataset.wl; render(); window.scrollTo(0,0); });
+}
+/* mọi khoản ra vào một ví, mới nhất ở trên, kèm số dư sau mỗi khoản */
+function walletTxView(id){
+  const w=walletById(id); if(!w){ S.homeSub="wallets"; return walletsDetailView(); }
+  const lines=[];
+  for (const t of S.txs){ const a=+t.amount||0;
+    if (t.kind==="transfer"){ if(t.walletId===id) lines.push({t,d:-a,title:"Chuyển sang "+(walletById(t.toWalletId)?.name||"ví khác")}); else if(t.toWalletId===id) lines.push({t,d:a,title:"Chuyển từ "+(walletById(t.walletId)?.name||"ví khác")}); }
+    else if (t.walletId===id) lines.push({t,d:t.kind==="income"?a:-a,title:catById(t.categoryId)?.name||"Không rõ hạng mục"}); }
+  lines.sort((x,y)=> x.t.date===y.t.date ? (x.t.createdAt||0)-(y.t.createdAt||0) : (x.t.date<y.t.date?-1:1));
+  let bal=Number(w.initial)||0; lines.forEach(l=>{ bal+=l.d; l.bal=bal; }); lines.reverse();
+  const groups={}; lines.forEach(l=>(groups[l.t.date]=groups[l.t.date]||[]).push(l));
+  $("#view").innerHTML = `<div><button class="chip" id="back">‹ Các ví</button></div>
+  <section class="balance"><div class="row">${icoHTML(walletIconKey(w),"lg")}<div style="min-width:0"><div class="label">${esc(w.name)}</div><div class="big num ${bal<0?"out-c":""}">${money(bal)}</div></div></div>
+    <div class="nw"><div><span>Số dư ban đầu</span><b class="num">${money(Number(w.initial)||0)}</b></div><div><span>Số khoản</span><b class="num">${lines.length}</b></div></div></section>
+  ${lines.length ? Object.keys(groups).map(d=>`<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span></div><div class="list-plain">${groups[d].map(l=>{ const c=catById(l.t.categoryId);
+      return `<button class="tx" data-id="${esc(l.t.id)}">${icoHTML(l.t.kind==="transfer"?"transfer":catIconKey(c))}<div class="mid"><div class="t">${esc(l.title)}</div><div class="s">${esc(l.t.note||"")}${l.t.note?" · ":""}còn ${money(l.bal)}</div></div><div class="amt num ${l.d>0?"in-c":""}">${l.d>0?"+":"−"}${fmt(Math.abs(l.d))}</div></button>`; }).join("")}</div></section>`).join("")
+    : `<div class="card">${emptyTx("Ví này chưa có giao dịch","Khi ghi chép chọn ví này, các khoản sẽ hiện ở đây.")}</div>`}`;
+  $("#back").onclick=()=>{ S.homeSub="wallets"; render(); window.scrollTo(0,0); };
+  bindTxRows();
 }
 function homeView(){
   if (S.homeSub==="wallets") return walletsDetailView();
+  if (S.homeSub?.startsWith("w:")) return walletTxView(S.homeSub.slice(2));
   if (S.homeSub) return debtView(S.homeSub);
   const bal = balances(); const total = Object.values(bal).reduce((a,b)=>a+b,0);
   const ym = ymOf(todayStr()); const {inc,exp} = monthTotals(ym);
@@ -574,7 +597,7 @@ function homeView(){
   </section>
   <section class="card">
     <div class="row between"><h2>Ví của nhà mình</h2><button class="link" id="goWallets">Quản lý</button></div>
-    <div class="hscroll">${sortedWallets().map(w=>`<button class="wcard" data-debt="wallets">${icoHTML(walletIconKey(w),"sm")}<div><div class="n">${esc(w.name)}</div><b class="num ${bal[w.id]<0?"out-c":""}">${money(bal[w.id])}</b></div></button>`).join("")}</div>
+    <div class="hscroll">${sortedWallets().map(w=>`<button class="wcard" data-debt="w:${esc(w.id)}">${icoHTML(walletIconKey(w),"sm")}<div><div class="n">${esc(w.name)}</div><b class="num ${bal[w.id]<0?"out-c":""}">${money(bal[w.id])}</b></div></button>`).join("")}</div>
   </section>
   <section class="card">
     <div class="row between"><h2>Chi tiêu tháng ${Number(ym.slice(5))}</h2><button class="link" id="goReport">Chi tiết</button></div>
