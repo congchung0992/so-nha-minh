@@ -108,6 +108,7 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .leg .r{display:flex;align-items:center;gap:8px;font-size:13.5px;min-width:0}
 .leg .r .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .leg i{width:10px;height:10px;border-radius:3px;flex:none}
+.leg .lv{font-size:12px;color:var(--muted);padding-left:18px;margin-top:-7px}
 
 /* Giao dịch */
 .monthbar{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface);border-radius:16px;padding:6px;box-shadow:var(--shadow)}
@@ -547,10 +548,18 @@ function bookView(){
     <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Tổng thu</span><b class="num in-c">${fmt(inc)}</b></span></div>
     <div><span class="arrow" style="background:var(--expense)">${ARROW_OUT}</span><span style="min-width:0"><span>Tổng chi</span><b class="num out-c">${fmt(exp)}</b></span></div>
   </div><div class="row between small"><span class="muted">Còn lại trong tháng</span><b class="num ${inc-exp<0?"out-c":"in-c"}">${money(inc-exp)}</b></div></div>
+  ${exp>0 ? (()=>{ const rows=byCategory(S.month,"expense"); const top=rows.slice(0,6), rest=rows.slice(6).reduce((s,r)=>s+r[1],0);
+    const pct=v=>{ const p=v/exp*100; return p.toFixed(p<10?1:0).replace(".",",")+"%"; };
+    return `<section class="card"><div class="row between"><h2>Chi tiêu ${monthLabel(S.month).toLowerCase()}</h2><button class="link" id="bkReport">Chi tiết</button></div>
+      <div class="donutwrap">${donut(rows,exp,`Đã chi<b class="num">${shortMoney(exp)}</b>`)}
+      <div class="leg">${top.map(([id,v])=>{ const c=catById(id); return `<div class="r"><i style="background:${catColor(c)}"></i><span class="t">${esc(c?.name||"Không rõ")}</span><b class="num small">${pct(v)}</b></div><div class="lv num">${fmt(v)}</div>`; }).join("")}
+      ${rest>0?`<div class="r"><i style="background:#9aa4ae"></i><span class="t">${rows.length-6} hạng mục khác</span><b class="num small">${pct(rest)}</b></div><div class="lv num">${fmt(rest)}</div>`:""}</div></div>
+    </section>`; })() : ""}
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const net=g.reduce((s,t)=>s+(t.kind==="income"?+t.amount:t.kind==="expense"?-t.amount:0),0);
     return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num">${net<0?"−":"+"}${fmt(Math.abs(net))}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
     : `<div class="card">${emptyTx("Tháng này chưa có ghi chép","Chuyển sang tháng khác hoặc bấm + để ghi.")}</div>`}`;
   bindMonthBar(); bindTxRows();
+  const br=$("#bkReport"); if(br) br.onclick=()=>{ S.repKind="expense"; setTab("report"); };
 }
 
 /* ---------- Ghi chép ---------- */
