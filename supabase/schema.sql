@@ -44,6 +44,8 @@ create table if not exists public.categories (
 create index if not exists categories_household_idx on public.categories(household_id);
 -- hạng mục con (VD "Đi chợ/siêu thị") ghi tên hạng mục cha ("Ăn uống"); trống = hạng mục cha
 alter table public.categories add column if not exists parent text not null default '';
+-- chi phí cố định (true) / phát sinh (false); để trống = app tự đoán theo tên hạng mục
+alter table public.categories add column if not exists fixed boolean;
 
 create table if not exists public.tx (
   id            text primary key default gen_random_uuid()::text,

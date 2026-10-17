@@ -122,6 +122,20 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .leg .r{flex-wrap:wrap;row-gap:0}
 .leg button.r{background:none;border:0;padding:2px 0;margin:-2px 0;width:100%;text-align:left;color:inherit;border-radius:8px;transition:opacity .2s}
 .leg button.r:active{opacity:.6}
+/* chi tiêu 6 tháng: mỗi tháng một thanh ngang chia màu */
+.trend{display:flex;flex-direction:column;gap:8px}
+.trow{display:grid;grid-template-columns:30px 1fr 64px;align-items:center;gap:8px;background:none;border:0;padding:0;color:inherit;text-align:left}
+.trow .tm{font-size:12.5px;color:var(--muted);font-weight:700}
+.trow .track{height:16px;border-radius:6px;background:var(--surface-2);overflow:hidden}
+.trow .sbar{display:flex;height:100%;border-radius:6px;overflow:hidden;gap:1px;transform-origin:left}
+.trow .sbar i{display:block;height:100%}
+.trow b{text-align:right;font-size:13px}
+#view.enter .trow .sbar{animation:grow .7s var(--ease-out) both;animation-delay:.15s}
+.tag{font-style:normal;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 5px;margin-left:4px;vertical-align:1px}
+.tag.fx{background:color-mix(in srgb,#4f8ef7 18%,transparent);color:#4f8ef7} .tag.vr{background:color-mix(in srgb,#f5a524 18%,transparent);color:#d48a0c}
+.fxsum{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fxsum > div{border-radius:14px;padding:10px 12px;background:var(--surface-2);border-left:4px solid var(--c);display:flex;flex-direction:column;gap:2px}
+.fxsum span{font-size:12px;color:var(--muted)} .fxsum b{font-size:18px} .fxsum small{font-size:12px;color:var(--muted);font-weight:600} .fxsum em{font-style:normal;font-size:12px;color:var(--muted)}
 .leg .lv{flex-basis:100%;font-size:12px;color:var(--muted);padding-left:18px}
 
 /* Giao dịch */
@@ -600,8 +614,6 @@ function homeView(){
   if (S.homeSub) return debtView(S.homeSub);
   const bal = balances(); const total = Object.values(bal).reduce((a,b)=>a+b,0);
   const ym = ymOf(todayStr()); const {inc,exp} = monthTotals(ym);
-  const recent = sortTx(S.txs).slice(0,5);
-  const rows = byCategory(ym,"expense");
   const {owe,owed} = debts(); const hasDebt = owe>0 || owed>0, net = total-owe+owed;
   $("#view").innerHTML = `
   <section class="balance" aria-label="Tổng số dư">
@@ -620,20 +632,48 @@ function homeView(){
     <div class="row between"><h2>Ví của nhà mình</h2><button class="link" id="goWallets">Quản lý</button></div>
     <div class="hscroll">${sortedWallets().map(w=>`<button class="wcard" data-debt="w:${esc(w.id)}">${icoHTML(walletIconKey(w),"sm")}<div><div class="n">${esc(w.name)}</div><b class="num ${bal[w.id]<0?"out-c":""}">${money(bal[w.id])}</b></div></button>`).join("")}</div>
   </section>
-  <section class="card">
-    <div class="row between"><h2>Chi tiêu tháng ${Number(ym.slice(5))}</h2><button class="link" id="goReport">Chi tiết</button></div>
-    <div class="donutwrap">${donut(rows,exp,`Đã chi<b class="num">${shortMoney(exp)}</b>`)}${legend(rows,exp)}</div>
-  </section>
-  <section class="card">
-    <div class="row between"><h2>Ghi chép gần đây</h2>${S.txs.length?`<button class="link" id="goBook">Xem sổ</button>`:""}</div>
-    ${recent.length ? `<div class="list-plain">${recent.map(txRow).join("")}</div>` : emptyTx("Chưa có khoản nào","Bấm nút + ở dưới để ghi khoản thu chi đầu tiên.")}
-  </section>`;
+  ${spendTrendCard(ym)}`;
   $("#goWallets").onclick=()=>{ S.moreSub="wallets"; setTab("more"); };
-  $("#goReport").onclick=()=>{ S.month=ym; setTab("report"); };
-  const gb=$("#goBook"); if(gb) gb.onclick=()=>setTab("book");
   document.querySelectorAll("[data-debt]").forEach(b=>b.onclick=()=>{ S.homeSub=b.dataset.debt; render(); window.scrollTo(0,0); });
+  document.querySelectorAll("[data-hm]").forEach(b=>b.onclick=()=>{ S.homeMode=b.dataset.hm; render(); });
+  document.querySelectorAll("[data-trend-m]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.trendM; S.repKind="expense"; setTab("report"); });
   bindCatDetail();
-  bindTxRows();
+}
+
+/* ---------- chi tiêu 6 tháng: theo hạng mục / cố định – phát sinh ---------- */
+const FIXED_RE=/thue nha|tien nha|\bdien\b|tien dien|\bnuoc\b|tien nuoc|internet|wifi|truyen hinh|dien thoai|hoc phi|bao hiem|lai vay|tra gop|gui xe|\bgas\b|phi quan ly|dich vu sinh hoat/;
+const isFixedCat = c => !!c && (c.fixed===true || (c.fixed!==false && FIXED_RE.test(strip(c.name)+" | "+strip(c.parent||""))));
+function spendTrendCard(ym){
+  const N=6, months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(ym,-i));
+  const mode=S.homeMode||"cat";
+  const per=months.map(m=>{ const rows=byCategory(m,"expense"); const tot=rows.reduce((s,r)=>s+r[1],0); let fix=0; rows.forEach(([id,v])=>{ if(isFixedCat(catById(id))) fix+=v; }); return {m,rows:Object.fromEntries(rows),tot,fix}; });
+  const grand=per.reduce((s,p)=>s+p.tot,0);
+  if (!grand) return `<section class="card"><h2>Chi tiêu ${N} tháng gần đây</h2>${emptyTx("Chưa có khoản chi nào","Ghi chép hoặc nhập sao kê để xem chi tiêu theo tháng.")}</section>`;
+  const catTot={}; per.forEach(p=>Object.entries(p.rows).forEach(([id,v])=>catTot[id]=(catTot[id]||0)+v));
+  const ranked=Object.entries(catTot).sort((a,b)=>b[1]-a[1]); const top=ranked.slice(0,6).map(r=>r[0]);
+  const colorOf=id=>{ const i=top.indexOf(id); return i<0?CHART_REST:rankColor(i); };
+  const max=Math.max(...per.map(p=>p.tot),1), months_with=per.filter(p=>p.tot>0).length||1;
+  const fixAll=per.reduce((s,p)=>s+p.fix,0), varAll=grand-fixAll;
+  const pct=v=>{ const p=v/grand*100; return p.toFixed(p<10?1:0).replace(".",",")+"%"; };
+  const FIX_C="#4f8ef7", VAR_C="#f5a524";
+  const bars=per.map(p=>{ let segs="";
+    if (mode==="cat"){ const parts=top.map(id=>[colorOf(id),p.rows[id]||0]); parts.push([CHART_REST,p.tot-top.reduce((s,id)=>s+(p.rows[id]||0),0)]); segs=parts.filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join(""); }
+    else segs=[[FIX_C,p.fix],[VAR_C,p.tot-p.fix]].filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join("");
+    return `<button class="trow" data-trend-m="${p.m}"><span class="tm">T${Number(p.m.slice(5))}</span><span class="track"><span class="sbar" style="width:${p.tot/max*100}%">${segs}</span></span><b class="num">${p.tot?shortMoney(p.tot):"–"}</b></button>`; }).join("");
+  const legendCat = ranked.slice(0,6).map(([id,v])=>{ const c=catById(id), f=isFixedCat(c);
+      return `<button class="r" data-catd="${esc(id)}"><i style="background:${colorOf(id)}"></i><span class="t">${esc(c?.name||"Không rõ")} <em class="tag ${f?"fx":"vr"}">${f?"Cố định":"Phát sinh"}</em></span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)} · TB ${shortMoney(v/months_with)}/tháng</span></button>`; }).join("")
+    + (ranked.length>6 ? `<div class="r"><i style="background:${CHART_REST}"></i><span class="t">${ranked.length-6} hạng mục khác</span><b class="num small">${pct(ranked.slice(6).reduce((s,r)=>s+r[1],0))}</b></div>` : "");
+  const fixCats=ranked.filter(([id])=>isFixedCat(catById(id)));
+  const legendFix = `<div class="fxsum">
+      <div style="--c:${FIX_C}"><span>Cố định</span><b class="num">${shortMoney(fixAll/months_with)}<small>/tháng</small></b><em>${pct(fixAll)} tổng chi</em></div>
+      <div style="--c:${VAR_C}"><span>Phát sinh</span><b class="num">${shortMoney(varAll/months_with)}<small>/tháng</small></b><em>${pct(varAll)} tổng chi</em></div></div>
+    <div class="small muted">Chi cố định gồm: ${fixCats.length?fixCats.map(([id,v])=>`${esc(catById(id)?.name||"")} (${shortMoney(v/months_with)})`).join(", "):"chưa có"}. Bấm vào một hạng mục ở chế độ Theo hạng mục để đổi Cố định / Phát sinh.</div>`;
+  return `<section class="card">
+    <div class="row between"><h2>Chi tiêu ${N} tháng</h2><span class="small muted num">TB ${shortMoney(grand/months_with)}/tháng</span></div>
+    <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-hm="cat" aria-pressed="${mode==="cat"}">Theo hạng mục</button><button data-hm="fix" aria-pressed="${mode==="fix"}">Cố định / Phát sinh</button></div>
+    <div class="trend">${bars}</div>
+    ${mode==="cat" ? `<div class="leg">${legendCat}</div>` : legendFix}
+  </section>`;
 }
 function emptyTx(t,s){ return `<div class="empty"><span class="art"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-2.5-1.5L13 21l-2-1.5L8.5 21 6 19.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></svg></span><b>${t}</b><span class="small">${s}</span></div>`; }
 function txRow(t){
@@ -828,11 +868,15 @@ function catDetailView(){
   <section class="balance"><div class="row">${icoHTML(catIconKey(c),"lg")}<div style="min-width:0"><div class="label">${esc(c?.parent?c.parent+" › ":"")}${esc(c?.name||"Không rõ")}</div><div class="big num ${kind==="income"?"in-c":"out-c"}">${money(sum)}</div></div></div>
     <div class="nw"><div><span>Số khoản</span><b class="num">${list.length}</b></div>
     <div><span>Chiếm trong ${kind==="income"?"tổng thu":"tổng chi"} ${monthLabel(S.month).toLowerCase()}</span><b class="num">${all?(sum/all*100).toFixed(1).replace(".",","):0}%</b></div>
-    ${list.length?`<div><span>Trung bình mỗi khoản</span><b class="num">${money(Math.round(sum/list.length))}</b></div>`:""}</div></section>
+    ${list.length?`<div><span>Trung bình mỗi khoản</span><b class="num">${money(Math.round(sum/list.length))}</b></div>`:""}</div>
+    ${c && kind==="expense" ? `<div class="field"><span class="flabel">Loại chi phí ${c.fixed===""||c.fixed==null?"<span class='muted'>(app đang tự đoán)</span>":""}</span>
+      <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-fx="1" aria-pressed="${isFixedCat(c)}">Cố định hằng tháng</button><button data-fx="0" aria-pressed="${!isFixedCat(c)}">Phát sinh</button></div></div>` : ""}</section>
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const tot=g.reduce((s,t)=>s+(+t.amount),0);
     return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num">${kind==="income"?"+":"−"}${fmt(tot)}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
     : `<div class="card">${emptyTx("Tháng này không có khoản nào","Chuyển sang tháng khác bằng nút ‹ ›.")}</div>`}`;
   $("#back").onclick=()=>{ S.repCat=null; render(); window.scrollTo(0,0); };
+  document.querySelectorAll("[data-fx]").forEach(b=>b.onclick=async()=>{ const fixed=b.dataset.fx==="1";
+    try{ await S.db.doc("categories/"+c.id).set({...strip0(c),fixed}); toast(fixed?"Đã xếp vào chi phí cố định":"Đã xếp vào chi phát sinh"); render(); }catch(e){ handleWriteErr(e); } });
   bindMonthBar(); bindTxRows();
 }
 function shortMoney(v){ if(v>=1e9) return (v/1e9).toLocaleString("vi-VN",{maximumFractionDigits:1})+" tỷ"; if(v>=1e6) return (v/1e6).toLocaleString("vi-VN",{maximumFractionDigits:1})+" tr"; if(v>=1e3) return (v/1e3).toLocaleString("vi-VN",{maximumFractionDigits:0})+"k"; return String(Math.round(v)); }
@@ -1565,10 +1609,10 @@ const lsSet = (k,v) => { try{ v==null?localStorage.removeItem(k):localStorage.se
 /* ánh xạ cột DB ↔ trường trong app */
 const MAP = {
   wallets:   {name:"name",type:"type",icon:"icon",initial:"initial",order:"sort"},
-  categories:{name:"name",kind:"kind",icon:"icon",order:"sort",parent:"parent"},
+  categories:{name:"name",kind:"kind",icon:"icon",order:"sort",parent:"parent",fixed:"fixed"},
   tx:        {kind:"kind",amount:"amount",walletId:"wallet_id",toWalletId:"to_wallet_id",categoryId:"category_id",date:"date",note:"note",ref:"ref",src:"src",by:"created_by",updatedBy:"updated_by"}
 };
-const NULLABLE = new Set(["to_wallet_id","category_id","created_by","updated_by","icon","src"]);
+const NULLABLE = new Set(["to_wallet_id","category_id","created_by","updated_by","icon","src","fixed"]);
 function toRow(col, o){
   const r={}; for (const [k,c] of Object.entries(MAP[col])) if (o[k]!==undefined){ let v=o[k]; if (NULLABLE.has(c) && v==="") v=null; r[c]=v; }
   if (col==="tx"){ if (o.createdAt) r.created_at=new Date(o.createdAt).toISOString(); if (o.updatedAt) r.updated_at=new Date(o.updatedAt).toISOString(); }
