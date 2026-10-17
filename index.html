@@ -872,20 +872,20 @@ function formView(){
     <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" autocomplete="off" placeholder="0" value="${f.amount?fmt(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
     <div class="quick">${[20000,50000,100000,200000,500000,1000000].map(n=>`<button class="chip" data-q="${n}">${fmt(n)}</button>`).join("")}<button class="chip" data-x="000">×1.000</button></div>
   </section>
+  <section class="card" style="gap:0">
+    <div class="selrow" style="border-top:0">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><input type="date" id="fDate" value="${esc(f.date)}"></div></div>
+    <div class="selrow">${icoHTML("pen","sm")}<div class="mid"><div class="flabel">Ghi chú</div><input id="fNote" maxlength="200" placeholder="Ví dụ: chợ sáng" value="${esc(f.note)}"></div></div>
+    ${f.kind==="transfer" ? `
+      <div class="selrow">${icoHTML("transfer","sm")}<div class="mid"><div class="flabel">Từ ví</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
+      <div class="selrow">${icoHTML(walletIconKey(walletById(f.toWalletId)),"sm")}<div class="mid"><div class="flabel">Sang ví</div><select id="fTo">${opt(f.toWalletId)}</select></div></div>`
+    : `<div class="selrow">${icoHTML(walletIconKey(walletById(f.walletId)),"sm")}<div class="mid"><div class="flabel">${f.kind==="income"?"Vào ví":"Từ ví"}</div><select id="fWallet">${opt(f.walletId)}</select></div></div>`}
+  </section>
   ${f.kind==="transfer" ? "" : `<section class="card">
     <div class="row between"><h2>Hạng mục</h2><button class="link" id="editCats">Sửa hạng mục</button></div>
     ${cats.length>8?`<div class="catsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="input" id="catQ" type="search" placeholder="Tìm hạng mục, ví dụ: điện, chợ, con…" autocomplete="off" aria-label="Tìm hạng mục"></div>`:""}
     <div class="catgrid">${cats.map(c=>`<button class="catbtn" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" data-s="${esc(strip(c.name+" "+(c.parent||"")))}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c))}<span class="n">${esc(c.name)}</span></button>`).join("")}</div>
     <p class="small muted" id="catNone" hidden style="margin:0;text-align:center">Không có hạng mục nào khớp. Bấm “Sửa hạng mục” để thêm mới.</p>
   </section>`}
-  <section class="card" style="gap:0">
-    ${f.kind==="transfer" ? `
-      <div class="selrow" style="border-top:0">${icoHTML("transfer","sm")}<div class="mid"><div class="flabel">Từ ví</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
-      <div class="selrow">${icoHTML(walletIconKey(walletById(f.toWalletId)),"sm")}<div class="mid"><div class="flabel">Sang ví</div><select id="fTo">${opt(f.toWalletId)}</select></div></div>`
-    : `<div class="selrow" style="border-top:0">${icoHTML(walletIconKey(walletById(f.walletId)),"sm")}<div class="mid"><div class="flabel">${f.kind==="income"?"Vào ví":"Từ ví"}</div><select id="fWallet">${opt(f.walletId)}</select></div></div>`}
-    <div class="selrow">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><input type="date" id="fDate" value="${esc(f.date)}"></div></div>
-    <div class="selrow">${icoHTML("pen","sm")}<div class="mid"><div class="flabel">Ghi chú</div><input id="fNote" maxlength="200" placeholder="Ví dụ: chợ sáng" value="${esc(f.note)}"></div></div>
-  </section>
   <div class="err" id="fErr" role="alert"></div>
   <div class="btnrow">${editing?`<button class="btn ghost" id="fCancel">Huỷ</button>`:""}<button class="btn" id="fSave" ${ro?"disabled":""}>${editing?"Lưu thay đổi":"Lưu ghi chép"}</button></div>
   ${editing && !ro ? (S.confirmDel ? `<div class="note row between" style="flex-wrap:wrap"><span>Xoá hẳn khoản này?</span><span class="row"><button class="chip" id="fDelNo">Không</button><button class="btn danger" id="fDelYes" style="min-height:38px;padding:8px 14px">Xoá</button></span></div>` : `<button class="btn danger" id="fDel">Xoá ghi chép</button>`) : ""}`;
