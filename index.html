@@ -898,13 +898,30 @@ function walletsView(){
     </div>
     <div class="err" id="wErr" role="alert"></div>
     <div class="btnrow"><button class="btn ghost" id="wReset" hidden>Huỷ sửa</button><button class="btn" id="wSave">Thêm ví</button></div>
+    <div id="wMerge" hidden style="display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px">
+      <span class="flabel">Gộp ví này vào ví khác</span>
+      <p class="small muted" style="margin:0">Mọi khoản của ví này chuyển sang ví được chọn, số dư ban đầu cộng dồn, các lần chuyển qua lại giữa hai ví được bỏ đi; sau đó ví này bị xoá.</p>
+      <div class="grid2"><select class="input" id="wMergeTo"></select><button class="btn ghost" id="wMergeGo">Gộp ví</button></div>
+    </div>
   </section>`;
   bindBack();
   let editing=null;
   const wi=$("#wInit"); wi.oninput=()=>{ const n=parseAmount(wi.value); wi.value=n?fmt(n):""; };
-  const reset=()=>{ editing=null; $("#wTitle").textContent="Thêm ví"; $("#wSave").textContent="Thêm ví"; $("#wReset").hidden=true; $("#wName").value=""; wi.value=""; $("#wType").value="cash"; };
+  const mg=$("#wMerge"), mgTo=$("#wMergeTo"), mgGo=$("#wMergeGo");
+  const reset=()=>{ editing=null; $("#wTitle").textContent="Thêm ví"; $("#wSave").textContent="Thêm ví"; $("#wReset").hidden=true; $("#wName").value=""; wi.value=""; $("#wType").value="cash"; mg.hidden=true; };
   $("#wReset").onclick=reset;
-  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const w=walletById(b.dataset.edit); editing=w.id; $("#wTitle").textContent="Sửa ví"; $("#wSave").textContent="Lưu ví"; $("#wReset").hidden=false; $("#wName").value=w.name; wi.value=w.initial?fmt(w.initial):""; $("#wType").value=w.type||"cash"; $("#wName").focus(); });
+  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const w=walletById(b.dataset.edit); editing=w.id; $("#wTitle").textContent="Sửa ví “"+w.name+"”"; $("#wSave").textContent="Lưu ví"; $("#wReset").hidden=false; $("#wName").value=w.name; wi.value=w.initial?fmt(w.initial):""; $("#wType").value=w.type||"cash";
+    const others=ws.filter(x=>x.id!==w.id); mg.hidden=!others.length;
+    mgTo.innerHTML=others.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join(""); mgGo.textContent="Gộp ví"; delete mgGo.dataset.armed;
+    $("#wTitle").scrollIntoView({block:"start",behavior:"smooth"}); });
+  mgTo.onchange=()=>{ mgGo.textContent="Gộp ví"; delete mgGo.dataset.armed; };
+  mgGo.onclick=async()=>{ const src=walletById(editing), dst=walletById(mgTo.value); if(!src||!dst) return;
+    const n=S.txs.filter(t=>t.walletId===src.id||t.toWalletId===src.id).length;
+    if (!mgGo.dataset.armed){ mgGo.dataset.armed="1"; mgGo.textContent=`Bấm lần nữa: gộp ${n} khoản của “${src.name}” vào “${dst.name}”`; return; }
+    mgGo.disabled=true; mgGo.textContent="Đang gộp…";
+    const {error}=await S.sb.rpc("merge_wallets",{p_household:S.hid,p_src:src.id,p_dst:dst.id});
+    if (error){ toast("Chưa gộp được: "+error.message); mgGo.disabled=false; mgGo.textContent="Gộp ví"; delete mgGo.dataset.armed; return; }
+    await S.db.reload(); toast(`Đã gộp “${src.name}” vào “${dst.name}”`); reset(); render(); };
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{ if(b.dataset.armed){ try{ await S.db.doc("wallets/"+b.dataset.del).delete(); toast("Đã xoá ví"); }catch(e){handleWriteErr(e)} } else { b.dataset.armed="1"; b.textContent="Xoá?"; } });
   $("#wSave").onclick=async()=>{ const name=$("#wName").value.trim(); const err=$("#wErr"); err.textContent="";
     if(!name){ err.textContent="Nhập tên ví."; return; }

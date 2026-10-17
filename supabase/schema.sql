@@ -159,3 +159,27 @@ begin
   begin alter publication supabase_realtime add table public.tx;         exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.members;    exception when duplicate_object then null; end;
 end $$;
+
+-- Gộp ví p_src vào ví p_dst: chuyển mọi giao dịch sang p_dst, bỏ các lần chuyển qua lại giữa hai ví (thành chuyển cho chính mình),
+-- cộng số dư ban đầu, rồi xoá ví p_src. Chạy trọn trong một giao dịch.
+create or replace function public.merge_wallets(p_household text, p_src text, p_dst text)
+returns integer language plpgsql security invoker set search_path = public as $$
+declare moved integer;
+begin
+  if p_src = p_dst then raise exception 'same_wallet'; end if;
+  -- chạy với quyền người gọi: RLS chỉ cho thấy ví của nhà mình, nên người ngoài sẽ rơi vào wallet_not_found
+  if not exists (select 1 from wallets where id = p_src and household_id = p_household)
+     or not exists (select 1 from wallets where id = p_dst and household_id = p_household) then
+    raise exception 'wallet_not_found';
+  end if;
+  delete from tx where household_id = p_household and kind = 'transfer'
+    and ((wallet_id = p_src and to_wallet_id = p_dst) or (wallet_id = p_dst and to_wallet_id = p_src));
+  update tx set wallet_id = p_dst where household_id = p_household and wallet_id = p_src;
+  get diagnostics moved = row_count;
+  update tx set to_wallet_id = p_dst where household_id = p_household and to_wallet_id = p_src;
+  update wallets set initial = initial + (select initial from wallets where id = p_src) where id = p_dst;
+  delete from wallets where id = p_src;
+  return moved;
+end $$;
+revoke all on function public.merge_wallets(text,text,text) from public, anon;
+grant execute on function public.merge_wallets(text,text,text) to authenticated;
