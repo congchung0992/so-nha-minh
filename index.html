@@ -1523,8 +1523,13 @@ function buildTcb(){
 function tcbView(){
   const st=S.importState, d=st.tcb, p=buildTcb();
   const tcbW=S.wallets.find(w=>strip(w.name).includes("techcom"));
-  if (st.defWallet==null) st.defWallet = tcbW ? tcbW.id : "__tcb";
-  const wOpts = S.wallets.map(w=>`<option value="${esc(w.id)}" ${w.id===st.defWallet?"selected":""}>${esc(w.name)}</option>`).join("") + (tcbW?"":`<option value="__tcb" ${st.defWallet==="__tcb"?"selected":""}>+ Tạo ví mới "Techcombank"</option>`);
+  if (st.defWallet==null){
+    // mặc định: ví đã từng nhận sao kê Techcombank, rồi ví tên Techcombank, rồi ví nhiều khoản nhất; chỉ tạo ví mới khi sổ chưa có ví nào
+    const cnt={}, tcbCnt={}; S.txs.forEach(t=>{ cnt[t.walletId]=(cnt[t.walletId]||0)+1; if(String(t.id).startsWith("tcb-")) tcbCnt[t.walletId]=(tcbCnt[t.walletId]||0)+1; });
+    const top=o=>Object.entries(o).filter(([id])=>walletById(id)).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    st.defWallet = top(tcbCnt) || tcbW?.id || top(cnt) || S.wallets[0]?.id || "__tcb";
+  }
+  const wOpts = S.wallets.map(w=>`<option value="${esc(w.id)}" ${w.id===st.defWallet?"selected":""}>${esc(w.name)} (${S.txs.filter(t=>t.walletId===w.id).length} khoản)</option>`).join("") + (tcbW?"":`<option value="__tcb" ${st.defWallet==="__tcb"?"selected":""}>+ Tạo ví mới "Techcombank"</option>`);
   const other=p.items.filter(it=>strip(it.cat.name)==="khac").length;
   $("#view").innerHTML = backBtn() + `<section class="card"><div class="row between"><h2>Sao kê Techcombank</h2><span class="small muted" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(st.fileName)}</span></div>
       <div class="small muted">${esc(tcase(d.owner))}${d.acct?" · TK "+esc(d.acct):""}</div>
