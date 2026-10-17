@@ -139,6 +139,10 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .kindhead.k-income .amountbox{background:color-mix(in srgb,var(--income) 10%,var(--surface-2))}
 .kindhead.k-transfer .amountbox{background:color-mix(in srgb,var(--transfer) 10%,var(--surface-2))}
 .kindhead .amountbox{transition:background-color .25s}
+.catsearch{position:relative}
+.catsearch svg{position:absolute;left:12px;top:50%;width:18px;height:18px;transform:translateY(-50%);fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;pointer-events:none}
+.catsearch .input{padding-left:38px;border-radius:14px;background:var(--surface-2);border-color:transparent}
+.catbtn[hidden]{display:none!important}
 .mergebox{display:flex;flex-direction:column;gap:8px;padding:10px;margin:2px 0 8px;border-radius:12px;background:var(--surface-2)}
 /* chi tiêu 6 tháng: mỗi tháng một thanh ngang chia màu */
 .trend{display:flex;flex-direction:column;gap:8px}
@@ -852,7 +856,9 @@ function formView(){
   </section>
   ${f.kind==="transfer" ? "" : `<section class="card">
     <div class="row between"><h2>Hạng mục</h2><button class="link" id="editCats">Sửa hạng mục</button></div>
-    <div class="catgrid">${cats.map(c=>`<button class="catbtn" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c))}<span class="n">${esc(c.name)}</span></button>`).join("")}</div>
+    ${cats.length>8?`<div class="catsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="input" id="catQ" type="search" placeholder="Tìm hạng mục, ví dụ: điện, chợ, con…" autocomplete="off" aria-label="Tìm hạng mục"></div>`:""}
+    <div class="catgrid">${cats.map(c=>`<button class="catbtn" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" data-s="${esc(strip(c.name+" "+(c.parent||"")))}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c))}<span class="n">${esc(c.name)}</span></button>`).join("")}</div>
+    <p class="small muted" id="catNone" hidden style="margin:0;text-align:center">Không có hạng mục nào khớp. Bấm “Sửa hạng mục” để thêm mới.</p>
   </section>`}
   <section class="card" style="gap:0">
     ${f.kind==="transfer" ? `
@@ -870,6 +876,8 @@ function formView(){
   document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{ if(f.kind===b.dataset.k) return; f.kind=b.dataset.k; const c=catById(f.categoryId); if(!c || c.kind!==f.kind) f.categoryId=""; formView(); });
   document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ f.amount=Number(b.dataset.q); formView(); });
   $("[data-x]").onclick=()=>{ f.amount=(Number(f.amount)||0)*1000; formView(); };
+  const cq=$("#catQ"); if(cq) cq.oninput=()=>{ const w=strip(cq.value).split(/\s+/).filter(Boolean); let n=0;
+    document.querySelectorAll(".catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; }); $("#catNone").hidden=n>0; };
   document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{ f.categoryId=b.dataset.cat; document.querySelectorAll("[data-cat]").forEach(z=>z.setAttribute("aria-pressed", z===b)); });
   const ec=$("#editCats"); if(ec) ec.onclick=()=>{ S.catKind=f.kind==="income"?"income":"expense"; S.moreSub="cats"; S.backTo="add"; S.tab="more"; markTab("more"); render(); window.scrollTo(0,0); };
   const fw=$("#fWallet"); if(fw) fw.onchange=()=>{ f.walletId=fw.value; formView(); };
