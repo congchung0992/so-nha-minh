@@ -203,6 +203,36 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .tablewrap table{border-collapse:collapse;font-size:12.5px;white-space:nowrap}
 .tablewrap td,.tablewrap th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}
 .list-plain{display:flex;flex-direction:column}
+/* Chuyển động: chỉ chạy khi đổi màn (#view.enter), không chạy lại khi dữ liệu realtime cập nhật */
+:root{--ease-out:cubic-bezier(.2,.8,.2,1);--ease-spring:cubic-bezier(.34,1.56,.64,1)}
+@keyframes rise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes spinIn{from{opacity:0;transform:rotate(-200deg) scale(.85)}to{opacity:1;transform:rotate(-90deg)}}
+@keyframes pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,16px) scale(.96)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes barUp{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+#view.enter > *{animation:rise .42s var(--ease-out) both;animation-delay:calc(var(--i,0) * 55ms)}
+#view.enter .catrow .bar i{animation:grow .7s var(--ease-out) both;transform-origin:left;animation-delay:.18s}
+#view.enter .donut svg{animation:spinIn .8s var(--ease-out) both;animation-delay:.1s}
+#view.enter .chart rect{animation:barUp .6s var(--ease-out) both;transform-box:fill-box;transform-origin:bottom;animation-delay:.15s}
+#view.enter .catgrid .catbtn .ico,#view.enter .hscroll .wcard{animation:pop .4s var(--ease-spring) both;animation-delay:calc(.12s + var(--j,0) * 22ms)}
+.toast.show{animation:toastIn .32s var(--ease-spring) both}
+/* phản hồi khi chạm: nút lún nhẹ rồi bật lại */
+.btn,.chip,.iconbtn,.tx,.menuitem,.catbtn,.wcard,.seg button,nav.tabs button,.picker button,.link{transition:transform .18s var(--ease-spring),background-color .2s,color .2s,box-shadow .2s,opacity .2s}
+.btn:active:not(:disabled),.chip:active,.iconbtn:active,.wcard:active,.picker button:active{transform:scale(.96)}
+.tx:active,.menuitem:active{transform:scale(.985)}
+.catbtn:active .ico{transform:scale(.9)}
+.catbtn .ico{transition:transform .25s var(--ease-spring),background-color .2s,color .2s}
+.catbtn[aria-pressed="true"] .ico{transform:scale(1.08)}
+.seg button:active{transform:scale(.95)}
+@media (hover:hover){.btn:hover:not(:disabled){box-shadow:0 6px 18px rgba(15,107,120,.28)} .tx:hover,.menuitem:hover{opacity:.82} .wcard:hover{transform:translateY(-2px)}}
+/* thanh tab: icon đang chọn nhô lên, nút + xoay khi bấm */
+nav.tabs button svg{transition:transform .3s var(--ease-spring)}
+nav.tabs button[aria-current="page"]:not(.add) svg{transform:translateY(-2px) scale(1.1)}
+nav.tabs .add span.plus{transition:transform .3s var(--ease-spring),box-shadow .3s}
+nav.tabs .add:active span.plus{transform:scale(.9) rotate(90deg)}
+nav.tabs .add[aria-current="page"] span.plus{box-shadow:0 8px 24px rgba(15,107,120,.45)}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);transition:border-color .2s,box-shadow .2s}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -314,7 +344,7 @@ const SVG_PREV='<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>', SVG_
 const ARROW_IN='<svg viewBox="0 0 24 24"><path d="M12 19V5M6 13l6 6 6-6"/></svg>', ARROW_OUT='<svg viewBox="0 0 24 24"><path d="M12 5v14M6 11l6-6 6 6"/></svg>';
 
 let toastT;
-function toast(msg){ let t=$(".toast"); if(!t){t=document.createElement("div");t.className="toast";t.setAttribute("role","status");document.body.appendChild(t)} t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
+function toast(msg){ let t=$(".toast"); if(!t){t=document.createElement("div");t.className="toast";t.setAttribute("role","status");document.body.appendChild(t)} t.textContent=msg; t.hidden=false; t.classList.remove("show"); void t.offsetWidth; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
 
 /* ---------- trạng thái ---------- */
 const S = {
@@ -359,8 +389,31 @@ function render(){
   if (S.offline){ v.innerHTML = `<div class="card"><h2>Chưa mở được sổ chung</h2><p class="muted small">Không kết nối được tới máy chủ. Kiểm tra mạng rồi tải lại trang.</p></div>`; return; }
   if (!(S.ready.w && S.ready.c && S.ready.t)) return;
   const needSetup = !S.cats.length || !S.wallets.length;
-  if (needSetup && S.tab!=="more"){ v.innerHTML = setupView(); bindSetup(); return; }
+  if (needSetup && S.tab!=="more"){ v.innerHTML = setupView(); bindSetup(); enterView("setup"); return; }
   ({home:homeView, book:bookView, add:formView, report:reportView, more:moreView})[S.tab]();
+  enterView([S.tab,S.moreSub,S.month,S.editId].join("|"));
+}
+
+/* hiệu ứng vào màn: chỉ khi đổi sang màn khác (key khác); cùng màn mà vẽ lại thì hiện ngay, không nháy */
+let lastViewKey=null, enterT=null;
+function enterView(key){
+  const v=$("#view"); if(!v) return;
+  if (key!=null && key===lastViewKey){ v.classList.remove("enter"); return; }
+  lastViewKey=key;
+  [...v.children].forEach((c,i)=>c.style.setProperty("--i",Math.min(i,8)));
+  v.querySelectorAll(".catgrid .catbtn .ico, .hscroll .wcard").forEach((el,j)=>el.style.setProperty("--j",Math.min(j,16)));
+  v.classList.remove("enter"); void v.offsetWidth; v.classList.add("enter");
+  clearTimeout(enterT); enterT=setTimeout(()=>v.classList.remove("enter"),1400);
+  v.querySelectorAll(".balance .big").forEach(countUp);
+}
+/* số dư chạy từ 0 lên giá trị thật */
+function countUp(el){
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const txt=el.textContent, n=Number(txt.replace(/[^\d]/g,"")); if(!n) return;
+  const neg=/^[−-]/.test(txt.trim()), t0=performance.now(), dur=750;
+  const step=now=>{ if(!el.isConnected) return; const k=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-k,3);
+    el.textContent=money((neg?-1:1)*Math.round(n*e)); if(k<1) requestAnimationFrame(step); else el.textContent=txt; };
+  requestAnimationFrame(step);
 }
 
 function setupView(){
@@ -1175,6 +1228,7 @@ function authView(msg){
     <button class="btn" id="aGo">${mode==="signup"?"Tạo tài khoản":"Đăng nhập"}</button>
     ${mode==="login"?`<button class="link" id="aReset" style="align-self:center">Quên mật khẩu? Đặt lại qua email</button>`:""}
   </section>`;
+  enterView("auth");
   document.querySelectorAll("[data-am]").forEach(b=>b.onclick=()=>{ S.lastEmail=$("#aEmail").value; S.authMode=b.dataset.am; authView(); });
   const go=$("#aGo"), err=$("#aErr");
   go.onclick=async()=>{ const email=$("#aEmail").value.trim(), password=$("#aPass").value; err.textContent=""; S.lastEmail=email;
@@ -1205,7 +1259,7 @@ function passwordView(fromRecovery){
     <div class="err" id="pErr" role="alert"></div>
     <button class="btn" id="pGo">Lưu mật khẩu</button>
   </section>`;
-  if(!fromRecovery) bindBack();
+  if(!fromRecovery) bindBack(); else enterView("password");
   const go=$("#pGo"), err=$("#pErr");
   go.onclick=async()=>{ const p=$("#pNew").value, p2=$("#pNew2").value; err.textContent="";
     if(p.length<6){ err.textContent="Mật khẩu cần ít nhất 6 ký tự."; return; }
@@ -1232,6 +1286,7 @@ function householdView(list){
     <div class="field"><label for="cMe">Tên bạn</label><input class="input" id="cMe" maxlength="30" placeholder="VD: Chồng"></div></div>
     <div class="err" id="cErr" role="alert"></div><button class="btn ghost" id="cGo">Tạo sổ</button></section>
   <button class="link" id="signOut" style="align-self:center">Đăng xuất (${esc(S.email||"")})</button>`;
+  enterView("households");
   document.querySelectorAll("[data-h]").forEach(b=>b.onclick=()=>openHousehold(b.dataset.h));
   $("#jGo").onclick=async()=>{ const code=$("#jCode").value.trim(), name=$("#jName").value.trim(), e=$("#jErr"); e.textContent="";
     if(code.length!==6){ e.textContent="Mã mời gồm 6 ký tự."; return; } if(!name){ e.textContent="Nhập tên để người nhà biết ai ghi."; return; }
