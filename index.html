@@ -1043,6 +1043,8 @@ function authView(msg){
     const res = mode==="signup" ? await S.sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}}) : await S.sb.auth.signInWithPassword({email,password});
     go.disabled=false; go.textContent=mode==="signup"?"Tạo tài khoản":"Đăng nhập";
     if (res.error){ const m=res.error.message||""; err.textContent = /invalid login/i.test(m)?"Sai email hoặc mật khẩu.": /not confirmed/i.test(m)?"Email chưa xác nhận. Mở hộp thư và bấm link xác nhận trước.": /already registered/i.test(m)?"Email này đã có tài khoản, chuyển sang Đăng nhập.": "Không đăng nhập được: "+m; return; }
+    // email đã có tài khoản: Supabase không báo lỗi, không gửi mail, chỉ trả về user không có identities
+    if (mode==="signup" && res.data.user && Array.isArray(res.data.user.identities) && !res.data.user.identities.length){ S.authMode="login"; authView("Email <b>"+esc(email)+"</b> đã có tài khoản. Nhập mật khẩu để đăng nhập, hoặc bấm <b>Quên mật khẩu</b> bên dưới để đặt mật khẩu mới."); return; }
     if (mode==="signup" && !res.data.session){ S.authMode="login"; authView("Đã gửi email xác nhận tới <b>"+esc(email)+"</b>. Mở hộp thư, bấm link xác nhận rồi quay lại đây đăng nhập."); }
   };
   const rs=$("#aReset"); if(rs) rs.onclick=async()=>{ const email=$("#aEmail").value.trim(); S.lastEmail=email; if(!/^\S+@\S+\.\S+$/.test(email)){ err.textContent="Nhập email trước rồi bấm lại."; return; }
