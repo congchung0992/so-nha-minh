@@ -137,6 +137,7 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .trow .sbar{display:flex;height:100%;border-radius:6px;overflow:hidden;gap:1px;transform-origin:left}
 .trow .sbar i{display:block;height:100%}
 .trow b{text-align:right;font-size:13px}
+.leg .more .chev{font-size:11px;margin-left:4px} .leg.morelist{border-left:2px solid var(--line);padding-left:10px;margin:2px 0 0 4px}
 .trow.cur .tm{color:var(--accent)} .trow.cur .track{box-shadow:0 0 0 2px var(--accent)}
 #view.enter .trow .sbar{animation:grow .7s var(--ease-out) both;animation-delay:.15s}
 .tag{font-style:normal;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 5px;margin-left:4px;vertical-align:1px}
@@ -647,6 +648,7 @@ function homeView(){
   ${spendTrendCard(ym)}`;
   document.querySelectorAll("[data-debt]").forEach(b=>b.onclick=()=>{ S.homeSub=b.dataset.debt; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-hm]").forEach(b=>b.onclick=()=>{ S.homeMode=b.dataset.hm; render(); });
+  const mc=$("#moreCats"); if(mc) mc.onclick=()=>{ S.homeMoreCats=!S.homeMoreCats; render(); };
   document.querySelectorAll("[data-cattrend]").forEach(b=>b.onclick=()=>{ S.homeSub="cat:"+b.dataset.cattrend; S.catTrendM=null; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-trend-m]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.trendM; S.repKind="expense"; setTab("report"); });
   bindCatDetail();
@@ -694,9 +696,12 @@ function spendTrendCard(ym){
     if (mode==="cat"){ const parts=top.map(id=>[colorOf(id),p.rows[id]||0]); parts.push([CHART_REST,p.tot-top.reduce((s,id)=>s+(p.rows[id]||0),0)]); segs=parts.filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join(""); }
     else segs=[[FIX_C,p.fix],[VAR_C,p.tot-p.fix]].filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join("");
     return `<button class="trow" data-trend-m="${p.m}"><span class="tm">T${Number(p.m.slice(5))}</span><span class="track"><span class="sbar" style="width:${p.tot/max*100}%">${segs}</span></span><b class="num">${p.tot?shortMoney(p.tot):"–"}</b></button>`; }).join("");
-  const legendCat = ranked.slice(0,6).map(([id,v])=>{ const c=catById(id), f=isFixedCat(c);
-      return `<button class="r" data-cattrend="${esc(id)}"><i style="background:${colorOf(id)}"></i><span class="t">${esc(c?.name||"Không rõ")} <em class="tag ${f?"fx":"vr"}">${f?"Cố định":"Phát sinh"}</em></span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)} · TB ${shortMoney(v/months_with)}/tháng</span></button>`; }).join("")
-    + (ranked.length>6 ? `<div class="r"><i style="background:${CHART_REST}"></i><span class="t">${ranked.length-6} hạng mục khác</span><b class="num small">${pct(ranked.slice(6).reduce((s,r)=>s+r[1],0))}</b></div>` : "");
+  const legRow = ([id,v]) => { const c=catById(id), f=isFixedCat(c);
+      return `<button class="r" data-cattrend="${esc(id)}"><i style="background:${colorOf(id)}"></i><span class="t">${esc(c?.name||"Không rõ")} <em class="tag ${f?"fx":"vr"}">${f?"Cố định":"Phát sinh"}</em></span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)} · TB ${shortMoney(v/months_with)}/tháng</span></button>`; };
+  const rest=ranked.slice(6), open=!!S.homeMoreCats;
+  const legendCat = ranked.slice(0,6).map(legRow).join("")
+    + (rest.length ? `<button class="r more" id="moreCats"><i style="background:${CHART_REST}"></i><span class="t">${open?"Thu gọn":`${rest.length} hạng mục khác`} <span class="chev">${open?"▴":"▾"}</span></span><b class="num small">${pct(rest.reduce((s,r)=>s+r[1],0))}</b></button>
+      ${open?`<div class="leg morelist">${rest.map(legRow).join("")}</div>`:""}` : "");
   const fixCats=ranked.filter(([id])=>isFixedCat(catById(id)));
   const legendFix = `<div class="fxsum">
       <div style="--c:${FIX_C}"><span>Cố định</span><b class="num">${shortMoney(fixAll/months_with)}<small>/tháng</small></b><em>${pct(fixAll)} tổng chi</em></div>
