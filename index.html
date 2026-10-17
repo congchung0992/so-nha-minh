@@ -184,7 +184,10 @@ body.selmode .wrap{padding-bottom:240px}
 .swipe > .tx{position:relative;z-index:1;background:var(--surface);touch-action:pan-y;transition:transform .22s var(--ease-out),background-color .15s}
 .swipe > .tx.dragging{transition:none}
 .swipe > .tx + .tx{border-top:0}
-.swipe .sdel{position:absolute;top:2px;bottom:2px;right:0;width:92px;border:0;border-radius:12px;background:var(--expense);color:#fff;font-weight:800;font-size:14px}
+.swipe .sdel{position:absolute;inset:2px 0;border-radius:12px;background:var(--expense);color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:flex-end;padding-right:22px;opacity:.55;transition:opacity .15s}
+.swipe.armed .sdel{opacity:1}
+.swipe{transition:height .25s var(--ease-out),opacity .25s} .swipe.gone{height:0!important;opacity:0}
+.toast{display:flex;align-items:center;gap:12px} .toast .undo{border:0;background:none;color:var(--accent-soft);font-weight:800;padding:2px 0;text-decoration:underline}
 .listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 2px}
 .catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 6px}
 .catbtn{border:0;background:none;border-radius:14px;padding:8px 2px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;text-align:center;min-width:0;font-weight:500}
@@ -385,6 +388,10 @@ const ARROW_IN='<svg viewBox="0 0 24 24"><path d="M12 19V5M6 13l6 6 6-6"/></svg>
 
 let toastT;
 function toast(msg){ let t=$(".toast"); if(!t){t=document.createElement("div");t.className="toast";t.setAttribute("role","status");document.body.appendChild(t)} t.textContent=msg; t.hidden=false; t.classList.remove("show"); void t.offsetWidth; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
+/* thông báo kèm nút Hoàn tác, giữ lâu hơn để kịp bấm */
+function undoToast(msg, undo){ toast(msg); const t=$(".toast"); const b=document.createElement("button"); b.className="undo"; b.textContent="Hoàn tác";
+  b.onclick=async()=>{ b.disabled=true; clearTimeout(toastT); try{ await undo(); toast("Đã khôi phục"); }catch(e){ handleWriteErr(e); } };
+  t.append(b); clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,5000); }
 
 /* ---------- trạng thái ---------- */
 const S = {
@@ -679,34 +686,40 @@ function bindTxRows(){
   if (S.sel) markSel();
   document.querySelectorAll(".tx[data-id]").forEach(b=>{ enableSwipe(b); b.onclick=()=>{
   if (b.dataset.swiped){ delete b.dataset.swiped; return; }          // vừa vuốt, không tính là bấm
-  if (b.classList.contains("open")){ closeSwipes(); return; }
   if (S.sel){ const id=b.dataset.id; S.sel.has(id)?S.sel.delete(id):S.sel.add(id); markSel(); return; }
   const t=S.txs.find(x=>x.id===b.dataset.id); if(!t) return; S.editId=t.id; S.form={...t}; S.tab="add"; markTab("add"); render(); window.scrollTo(0,0); }; }); }
 
-/* vuốt một khoản sang trái → hiện nút Xoá đỏ phía sau; bấm Xoá để xoá ngay */
-const SWIPE_W=92;
-function closeSwipes(except){ document.querySelectorAll(".swipe > .tx.open").forEach(r=>{ if(r!==except){ r.classList.remove("open"); r.style.transform=""; } }); }
+/* vuốt một khoản sang trái quá ngưỡng → xoá luôn (có nút Hoàn tác trong thông báo); vuốt ngắn thì trả về */
+const SWIPE_DEL=110;
+function closeSwipes(){}
 function enableSwipe(row){
   if (S.canWrite===false) return;
   let wrap=row.parentElement;
   if (!wrap.classList.contains("swipe")){
     wrap=document.createElement("div"); wrap.className="swipe"; row.before(wrap);
-    const del=document.createElement("button"); del.className="sdel"; del.type="button"; del.innerHTML="Xoá"; del.setAttribute("aria-label","Xoá khoản này");
-    wrap.append(del, row);
-    del.onclick=async()=>{ const id=row.dataset.id; del.disabled=true; del.textContent="…";
-      try{ await S.db.doc("tx/"+id).delete(); S.sel&&S.sel.delete(id); toast("Đã xoá"); render(); }catch(e){ handleWriteErr(e); del.disabled=false; del.textContent="Xoá"; } };
+    const bg=document.createElement("div"); bg.className="sdel"; bg.setAttribute("aria-hidden","true"); bg.textContent="Xoá";
+    wrap.append(bg, row);
   }
-  let x0=0, y0=0, dx=0, mode=null, base=0;
-  row.onpointerdown=e=>{ if(S.sel || e.button>0) return; x0=e.clientX; y0=e.clientY; dx=0; mode="maybe"; base=row.classList.contains("open")?-SWIPE_W:0; };
+  let x0=0, y0=0, dx=0, mode=null;
+  row.onpointerdown=e=>{ if(S.sel || e.button>0) return; x0=e.clientX; y0=e.clientY; dx=0; mode="maybe"; };
   row.onpointermove=e=>{ if(!mode) return; const mx=e.clientX-x0, my=e.clientY-y0;
-    if (mode==="maybe"){ if(Math.abs(my)>10 && Math.abs(my)>Math.abs(mx)){ mode=null; return; } if(Math.abs(mx)<10) return; mode="drag"; row.classList.add("dragging"); closeSwipes(row); try{ row.setPointerCapture(e.pointerId); }catch(_){} }
-    dx=mx; const x=Math.min(0,Math.max(base+dx,-SWIPE_W*1.6)); row.style.transform=`translateX(${x}px)`; };
+    if (mode==="maybe"){ if(Math.abs(my)>10 && Math.abs(my)>Math.abs(mx)){ mode=null; return; } if(Math.abs(mx)<10) return; mode="drag"; row.classList.add("dragging"); try{ row.setPointerCapture(e.pointerId); }catch(_){} }
+    dx=Math.min(0,mx); row.style.transform=`translateX(${dx}px)`; wrap.classList.toggle("armed", dx< -SWIPE_DEL); };
   const end=()=>{ if(mode==="drag"){ row.classList.remove("dragging"); row.dataset.swiped="1"; setTimeout(()=>delete row.dataset.swiped,350);
-      const open = base+dx < -SWIPE_W/2; row.classList.toggle("open",open); row.style.transform=open?`translateX(-${SWIPE_W}px)`:""; }
+      if (dx < -SWIPE_DEL) swipeDelete(row, wrap); else { row.style.transform=""; wrap.classList.remove("armed"); } }
     mode=null; };
   row.onpointerup=end; row.onpointercancel=end;
 }
-document.addEventListener("pointerdown",e=>{ if(!e.target.closest(".swipe")) closeSwipes(); },true);
+async function swipeDelete(row, wrap){
+  const id=row.dataset.id; const t=S.txs.find(x=>x.id===id); if(!t) return;
+  const keep={...t}; delete keep.id;
+  row.style.transform="translateX(-110%)"; wrap.style.height=wrap.offsetHeight+"px"; void wrap.offsetHeight; wrap.classList.add("gone");
+  try{
+    await S.db.doc("tx/"+id).delete(); S.sel&&S.sel.delete(id);
+    const c=catById(t.categoryId);
+    undoToast(`Đã xoá ${t.kind==="income"?"+":"−"}${fmt(t.amount)} · ${c?.name||t.note||"khoản"}`, ()=>S.db.doc("tx/"+id).set(keep));
+  }catch(e){ handleWriteErr(e); render(); }
+}
 
 /* ---------- Sổ ---------- */
 function monthBar(){ return `<div class="monthbar"><button class="iconbtn" id="mPrev" aria-label="Tháng trước">${SVG_PREV}</button><strong>${esc(monthLabel(S.month))}</strong><button class="iconbtn" id="mNext" aria-label="Tháng sau">${SVG_NEXT}</button></div>`; }
