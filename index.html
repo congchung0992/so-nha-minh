@@ -1051,7 +1051,7 @@ function authView(msg){
     rs.disabled=true;
     const {error}=await S.sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
     rs.disabled=false;
-    if(error){ err.textContent=/rate limit|seconds/i.test(error.message)?"Vừa gửi rồi, đợi một lát rồi thử lại.":"Chưa gửi được: "+error.message; return; }
+    if(error){ err.textContent=/rate limit|seconds/i.test(error.message)?"Hệ thống đang tạm giới hạn số email gửi đi. Thử lại sau khoảng 1 giờ.":"Chưa gửi được: "+error.message; return; }
     authView("Đã gửi link đặt lại mật khẩu tới <b>"+esc(email)+"</b>. Mở email, bấm link rồi nhập mật khẩu mới."); };
 }
 
