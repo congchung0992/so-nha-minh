@@ -473,7 +473,7 @@ const byName = id => !id ? "" : (id===S.uid ? "Bạn" : (S.profiles[id] || "Ngư
 /* ---------- điều hướng ---------- */
 function markTab(t){ document.querySelectorAll("nav.tabs button").forEach(b=> b.dataset.tab===t ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current")); }
 function setTab(t){ S.tab=t; if(t==="add" && !S.editId) S.form=null; if(t!=="add") S.editId=null; S.confirmDel=false; markTab(t); render(); window.scrollTo(0,0); }
-document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ if(b.dataset.tab==="more") S.moreSub="menu"; if(b.dataset.tab==="home") S.homeSub=null; if(b.dataset.tab==="report"){ S.repCat=null; S.repParty=null; } setTab(b.dataset.tab); }));
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ if(b.dataset.tab==="more") S.moreSub="menu"; if(b.dataset.tab==="home") S.homeSub=null; if(b.dataset.tab==="book"){ S.repCat=null; S.repParty=null; } setTab(b.dataset.tab); }));
 
 function render(){
   const v = $("#view");
@@ -667,7 +667,7 @@ function homeView(){
   const mc=$("#moreCats"); if(mc) mc.onclick=()=>{ S.homeMoreCats=!S.homeMoreCats; render(); };
   document.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>{ S.homeOpenGroup = S.homeOpenGroup===b.dataset.group?null:b.dataset.group; render(); });
   document.querySelectorAll("[data-cattrend]").forEach(b=>b.onclick=()=>{ S.homeSub="cat:"+b.dataset.cattrend; S.catTrendM=null; render(); window.scrollTo(0,0); });
-  document.querySelectorAll("[data-trend-m]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.trendM; S.repKind="expense"; setTab("report"); });
+  document.querySelectorAll("[data-trend-m]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.trendM; S.repKind="expense"; S.repCat=null; S.repParty=null; setTab("book"); });
   bindCatDetail();
 }
 
@@ -812,7 +812,33 @@ async function swipeDelete(row, wrap){
 /* ---------- Sổ ---------- */
 function monthBar(){ return `<div class="monthbar"><button class="iconbtn" id="mPrev" aria-label="Tháng trước">${SVG_PREV}</button><strong>${esc(monthLabel(S.month))}</strong><button class="iconbtn" id="mNext" aria-label="Tháng sau">${SVG_NEXT}</button></div>`; }
 function bindMonthBar(){ $("#mPrev").onclick=()=>{S.month=shiftYm(S.month,-1);render()}; $("#mNext").onclick=()=>{S.month=shiftYm(S.month,1);render()}; }
+/* phân tích một tháng: biểu đồ tròn Chi/Thu + danh sách theo hạng mục hoặc theo người nhận (đặt trong Sổ) */
+function monthBreakdown(){
+  const kind = S.repKind||"expense", group = S.repGroup||"cat";
+  const {inc,exp}=monthTotals(S.month); const rows=byCategory(S.month,kind); const total=kind==="income"?inc:exp;
+  const pct=v=>{ const p=total?v/total*100:0; return p.toFixed(p<10?1:0).replace(".",",")+"%"; };
+  return `<section class="card">
+    <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rk="expense" data-k="expense" aria-pressed="${kind==="expense"}">Chi tiền</button><button data-rk="income" data-k="income" aria-pressed="${kind==="income"}">Thu tiền</button></div>
+    <div class="donutwrap">${donut(rows,total,`${kind==="income"?"Tổng thu":"Tổng chi"}<b class="num">${shortMoney(total)}</b>`)}${legend(rows,total,6).replace("Chưa có khoản chi nào",kind==="income"?"Chưa có khoản thu nào":"Chưa có khoản chi nào")}</div>
+  </section>
+  ${rows.length?`<section class="card">
+    <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rg="cat" aria-pressed="${group==="cat"}">Theo hạng mục</button><button data-rg="party" aria-pressed="${group==="party"}">${kind==="income"?"Theo người chuyển":"Theo người nhận"}</button></div>
+    ${group==="cat" ? rows.map(([id,v],i)=>{ const c=catById(id); const p=total?v/total*100:0;
+    return `<button class="catrow" data-catd="${esc(id)}" style="--c:${rankColor(i)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b class="${kind==="income"?"in-c":"out-c"}">${fmt(v)}</b> <span class="muted">${pct(v)}</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")
+    : byParty(S.month,kind).map(([name,v],i)=>{ const p=total?v/total*100:0;
+    return `<button class="catrow" data-party="${esc(name)}" style="--c:${rankColor(i)}"><span class="ico sm av" style="--c:${rankColor(i)}">${esc(initials(name))}</span><span class="nm">${esc(name||partyNone(kind))}</span><span class="num small"><b class="${kind==="income"?"in-c":"out-c"}">${fmt(v)}</b> <span class="muted">${pct(v)}</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")}
+  </section>`:""}`;
+}
+function bindMonthBreakdown(){
+  document.querySelectorAll("[data-rk]").forEach(b=>b.onclick=()=>{ S.repKind=b.dataset.rk; render(); });
+  document.querySelectorAll("[data-rg]").forEach(b=>b.onclick=()=>{ S.repGroup=b.dataset.rg; render(); });
+  document.querySelectorAll("[data-party]").forEach(b=>{ enableSwipe(b, swipeDeleteParty, "Xoá cả người này");
+    b.onclick=()=>{ if (b.dataset.swiped){ delete b.dataset.swiped; return; } S.repParty=b.dataset.party||"\u0000"; render(); window.scrollTo(0,0); }; });
+  bindCatDetail();
+}
 function bookView(){
+  if (S.repCat) return catDetailView();
+  if (S.repParty!=null) return partyDetailView();
   const list = sortTx(S.txs.filter(t=>ymOf(t.date)===S.month));
   const {inc,exp} = monthTotals(S.month);
   const groups = {}; list.forEach(t=>(groups[t.date]=groups[t.date]||[]).push(t));
@@ -821,20 +847,12 @@ function bookView(){
     <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Tổng thu</span><b class="num in-c">${fmt(inc)}</b></span></div>
     <div><span class="arrow" style="background:var(--expense)">${ARROW_OUT}</span><span style="min-width:0"><span>Tổng chi</span><b class="num out-c">${fmt(exp)}</b></span></div>
   </div><div class="row between small"><span class="muted">Còn lại trong tháng</span><b class="num ${inc-exp<0?"out-c":"in-c"}">${money(inc-exp)}</b></div></div>
-  ${exp>0 ? (()=>{ const rows=byCategory(S.month,"expense"); const top=rows.slice(0,6), rest=rows.slice(6).reduce((s,r)=>s+r[1],0);
-    const pct=v=>{ const p=v/exp*100; return p.toFixed(p<10?1:0).replace(".",",")+"%"; };
-    return `<section class="card"><div class="row between"><h2>Chi tiêu ${monthLabel(S.month).toLowerCase()}</h2><button class="link" id="bkReport">Chi tiết</button></div>
-      <div class="donutwrap">${donut(rows,exp,`Đã chi<b class="num">${shortMoney(exp)}</b>`)}
-      <div class="leg">${top.map(([id,v],i)=>{ const c=catById(id); return `<button class="r" data-catd="${esc(id)}"><i style="background:${rankColor(i)}"></i><span class="t">${esc(c?.name||"Không rõ")}</span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)}</span></button>`; }).join("")}
-      ${rest>0?`<div class="r"><i style="background:${CHART_REST}"></i><span class="t">${rows.length-6} hạng mục khác</span><b class="num small">${pct(rest)}</b><span class="lv num">${fmt(rest)}</span></div>`:""}</div></div>
-    </section>`; })() : ""}
+  ${inc||exp ? monthBreakdown() : ""}
   ${list.length ? `<div class="listhead"><h2>${list.length} khoản trong tháng</h2></div>` : ""}
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const net=g.reduce((s,t)=>s+(t.kind==="income"?+t.amount:t.kind==="expense"?-t.amount:0),0);
     return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num ${net<0?"out-c":"in-c"}">${net<0?"−":"+"}${fmt(Math.abs(net))}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
     : `<div class="card">${emptyTx("Tháng này chưa có ghi chép","Chuyển sang tháng khác hoặc bấm + để ghi.")}</div>`}`;
-  bindMonthBar(); bindTxRows();
-  const br=$("#bkReport"); if(br) br.onclick=()=>{ S.repKind="expense"; setTab("report"); };
-  bindCatDetail();
+  bindMonthBar(); bindTxRows(); bindMonthBreakdown();
 }
 
 /* ---------- Ghi chép ---------- */
@@ -928,7 +946,7 @@ function partyDetailView(){
   const sum=list.reduce((s,t)=>s+(+t.amount),0); const {inc,exp}=monthTotals(S.month); const all=kind==="income"?inc:exp;
   const groups={}; list.forEach(t=>(groups[t.date]=groups[t.date]||[]).push(t));
   const cats={}; list.forEach(t=>{ const n=catById(t.categoryId)?.name||"Không rõ"; cats[n]=(cats[n]||0)+(+t.amount); });
-  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Báo cáo</button></div>${monthBar()}
+  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Sổ</button></div>${monthBar()}
   <section class="balance"><div class="row"><span class="ico lg av" style="--c:${rankColor(0)}">${esc(initials(party||"?"))}</span><div style="min-width:0"><div class="label">${esc(party||partyNone(kind))}</div><div class="big num ${kind==="income"?"in-c":"out-c"}">${money(sum)}</div></div></div>
     <div class="nw"><div><span>Số khoản</span><b class="num">${list.length}</b></div>
     <div><span>Chiếm trong ${kind==="income"?"tổng thu":"tổng chi"} ${monthLabel(S.month).toLowerCase()}</span><b class="num">${all?(sum/all*100).toFixed(1).replace(".",","):0}%</b></div>
@@ -940,9 +958,6 @@ function partyDetailView(){
   bindMonthBar(); bindTxRows();
 }
 function reportView(){
-  if (S.repCat) return catDetailView();
-  if (S.repParty!=null) return partyDetailView();
-  const kind = S.repKind||"expense", group = S.repGroup||"cat";
   const N=12; const months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(S.month,-i));
   const data = months.map(m=>({m, ...monthTotals(m)}));
   const sumI=data.reduce((s,d)=>s+d.inc,0), sumE=data.reduce((s,d)=>s+d.exp,0);
@@ -952,39 +967,21 @@ function reportView(){
     ${data.slice().reverse().map(d=>`<button class="mt-r${d.m===S.month?" cur":""}" data-ym="${d.m}"><span>${Number(d.m.slice(5))}/${d.m.slice(2,4)}</span><span class="num in-c">${d.inc?fmt(d.inc):"–"}</span><span class="num out-c">${d.exp?fmt(d.exp):"–"}</span>${d.inc||d.exp?`<span class="mt-d">Còn lại <b class="num ${diffCls(d.inc-d.exp)}">${sign(d.inc-d.exp)}</b></span>`:""}</button>`).join("")}
     <div class="mt-r mt-t"><span>Cộng</span><span class="num in-c">${fmt(sumI)}</span><span class="num out-c">${fmt(sumE)}</span><span class="mt-d">Còn lại <b class="num ${diffCls(sumI-sumE)}">${sign(sumI-sumE)}</b></span></div>
   </div>`;
-  const {inc,exp}=monthTotals(S.month);
-  const rows=byCategory(S.month,kind); const total=kind==="income"?inc:exp;
   $("#view").innerHTML = `${monthBar()}
-  <section class="card">
-    <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rk="expense" data-k="expense" aria-pressed="${kind==="expense"}">Chi tiền</button><button data-rk="income" data-k="income" aria-pressed="${kind==="income"}">Thu tiền</button></div>
-    <div class="donutwrap">${donut(rows,total,`${kind==="income"?"Tổng thu":"Tổng chi"}<b class="num">${shortMoney(total)}</b>`)}${legend(rows,total,6).replace("Chưa có khoản chi nào",kind==="income"?"Chưa có khoản thu nào":"Chưa có khoản chi nào")}</div>
-  </section>
-  ${rows.length?`<section class="card">
-    <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rg="cat" aria-pressed="${group==="cat"}">Theo hạng mục</button><button data-rg="party" aria-pressed="${group==="party"}">${kind==="income"?"Theo người chuyển":"Theo người nhận"}</button></div>
-    ${group==="cat" ? rows.map(([id,v],i)=>{ const c=catById(id); const p=total?v/total*100:0;
-    return `<button class="catrow" data-catd="${esc(id)}" style="--c:${rankColor(i)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b class="${kind==="income"?"in-c":"out-c"}">${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")
-    : byParty(S.month,kind).map(([name,v,n],i)=>{ const p=total?v/total*100:0;
-    return `<button class="catrow" data-party="${esc(name)}" style="--c:${rankColor(i)}"><span class="ico sm av" style="--c:${rankColor(i)}">${esc(initials(name))}</span><span class="nm">${esc(name||partyNone(kind))}</span><span class="num small"><b class="${kind==="income"?"in-c":"out-c"}">${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")}
-  </section>`:""}
-  <section class="card"><h2>Thu chi ${N} tháng</h2>${table}<p class="small muted" style="margin:0">Chỉ tính tiền thật sự kiếm được và tiêu mất. Không tính chuyển giữa các ví, đi vay, cho vay, trả nợ, thu nợ và điều chỉnh số dư. Các khoản này vẫn có trong sổ và số dư ví.</p></section>`;
+  <section class="card"><h2>Thu chi ${N} tháng</h2>${table}<p class="small muted" style="margin:0">Chỉ tính tiền thật sự kiếm được và tiêu mất. Không tính chuyển giữa các ví, đi vay, cho vay, trả nợ, thu nợ và điều chỉnh số dư. Các khoản này vẫn có trong sổ và số dư ví. Bấm vào một tháng để xem chi tiết ở Sổ.</p></section>`;
   bindMonthBar();
-  document.querySelectorAll("[data-ym]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.ym; render(); window.scrollTo(0,0); });
-  document.querySelectorAll("[data-rk]").forEach(b=>b.onclick=()=>{ S.repKind=b.dataset.rk; reportView(); });
-  document.querySelectorAll("[data-rg]").forEach(b=>b.onclick=()=>{ S.repGroup=b.dataset.rg; reportView(); });
-  document.querySelectorAll("[data-party]").forEach(b=>{ enableSwipe(b, swipeDeleteParty, "Xoá cả người này");
-    b.onclick=()=>{ if (b.dataset.swiped){ delete b.dataset.swiped; return; } S.repParty=b.dataset.party||"\u0000"; render(); window.scrollTo(0,0); }; });
-  bindCatDetail();
+  document.querySelectorAll("[data-ym]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.ym; S.repCat=null; S.repParty=null; setTab("book"); });
 }
 /* bấm một hạng mục (biểu đồ tròn hoặc danh sách) → các khoản của hạng mục đó trong tháng */
 function bindCatDetail(){
   document.querySelectorAll(".catrow[data-catd]").forEach(b=>enableSwipe(b, swipeDeleteCat, "Xoá cả hạng mục"));
-  document.querySelectorAll("[data-catd]").forEach(b=>b.onclick=()=>{ if (b.dataset.swiped){ delete b.dataset.swiped; return; } S.repCat=b.dataset.catd; if(S.tab!=="report"){ if(S.tab==="home") S.month=ymOf(todayStr()); setTab("report"); } else { render(); window.scrollTo(0,0); } }); }
+  document.querySelectorAll("[data-catd]").forEach(b=>b.onclick=()=>{ if (b.dataset.swiped){ delete b.dataset.swiped; return; } S.repCat=b.dataset.catd; if(S.tab!=="book"){ if(S.tab==="home") S.month=ymOf(todayStr()); setTab("book"); } else { render(); window.scrollTo(0,0); } }); }
 function catDetailView(){
   const c=catById(S.repCat); const kind=c?.kind||"expense";
   const list=sortTx(S.txs.filter(t=>t.categoryId===S.repCat && ymOf(t.date)===S.month && t.kind!=="transfer"));
   const sum=list.reduce((s,t)=>s+(+t.amount),0); const {inc,exp}=monthTotals(S.month); const all=kind==="income"?inc:exp;
   const groups={}; list.forEach(t=>(groups[t.date]=groups[t.date]||[]).push(t));
-  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Báo cáo</button></div>${monthBar()}
+  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Sổ</button></div>${monthBar()}
   <section class="balance"><div class="row">${icoHTML(catIconKey(c),"lg")}<div style="min-width:0"><div class="label">${esc(c?.parent?c.parent+" › ":"")}${esc(c?.name||"Không rõ")}</div><div class="big num ${kind==="income"?"in-c":"out-c"}">${money(sum)}</div></div></div>
     <div class="nw"><div><span>Số khoản</span><b class="num">${list.length}</b></div>
     <div><span>Chiếm trong ${kind==="income"?"tổng thu":"tổng chi"} ${monthLabel(S.month).toLowerCase()}</span><b class="num">${all?(sum/all*100).toFixed(1).replace(".",","):0}%</b></div>
