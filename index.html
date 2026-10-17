@@ -148,6 +148,7 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .trow .sbar{display:flex;height:100%;border-radius:6px;overflow:hidden;gap:1px;transform-origin:left}
 .trow .sbar i{display:block;height:100%}
 .trow b{text-align:right;font-size:13px}
+.tag.mx{background:color-mix(in srgb,#a259ff 18%,transparent);color:#a259ff} .leg.kids{border-left:2px solid var(--line);padding-left:10px;margin:0 0 6px 4px}
 .leg .more .chev{font-size:11px;margin-left:4px} .leg.morelist{border-left:2px solid var(--line);padding-left:10px;margin:2px 0 0 4px}
 .trow.cur .tm{color:var(--accent)} .trow.cur .track{box-shadow:0 0 0 2px var(--accent)}
 #view.enter .trow .sbar{animation:grow .7s var(--ease-out) both;animation-delay:.15s}
@@ -660,6 +661,7 @@ function homeView(){
   document.querySelectorAll("[data-debt]").forEach(b=>b.onclick=()=>{ S.homeSub=b.dataset.debt; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-hm]").forEach(b=>b.onclick=()=>{ S.homeMode=b.dataset.hm; render(); });
   const mc=$("#moreCats"); if(mc) mc.onclick=()=>{ S.homeMoreCats=!S.homeMoreCats; render(); };
+  document.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>{ S.homeOpenGroup = S.homeOpenGroup===b.dataset.group?null:b.dataset.group; render(); });
   document.querySelectorAll("[data-cattrend]").forEach(b=>b.onclick=()=>{ S.homeSub="cat:"+b.dataset.cattrend; S.catTrendM=null; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-trend-m]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.trendM; S.repKind="expense"; setTab("report"); });
   bindCatDetail();
@@ -697,21 +699,29 @@ function spendTrendCard(ym){
   const grand=per.reduce((s,p)=>s+p.tot,0);
   if (!grand) return `<section class="card"><h2>Chi tiêu ${N} tháng gần đây</h2>${emptyTx("Chưa có khoản chi nào","Ghi chép hoặc nhập sao kê để xem chi tiêu theo tháng.")}</section>`;
   const catTot={}; per.forEach(p=>Object.entries(p.rows).forEach(([id,v])=>catTot[id]=(catTot[id]||0)+v));
-  const ranked=Object.entries(catTot).sort((a,b)=>b[1]-a[1]); const top=ranked.slice(0,6).map(r=>r[0]);
-  const colorOf=id=>{ const i=top.indexOf(id); return i<0?CHART_REST:rankColor(i); };
+  const ranked=Object.entries(catTot).sort((a,b)=>b[1]-a[1]);
+  // gom hạng mục con vào hạng mục cha: "Ăn uống" = Ăn uống + Đi chợ/siêu thị + Ăn sáng…
+  const groupOf=id=>{ const c=catById(id); return (c?.parent||c?.name||"Không rõ").trim(); };
+  const gTot={}, gKids={}; ranked.forEach(([id,v])=>{ const g=groupOf(id); gTot[g]=(gTot[g]||0)+v; (gKids[g]=gKids[g]||[]).push([id,v]); });
+  per.forEach(p=>{ p.g={}; Object.entries(p.rows).forEach(([id,v])=>{ const g=groupOf(id); p.g[g]=(p.g[g]||0)+v; }); });
+  const granked=Object.entries(gTot).sort((a,b)=>b[1]-a[1]); const top=granked.slice(0,6).map(r=>r[0]);
+  const colorOf=g=>{ const i=top.indexOf(g); return i<0?CHART_REST:rankColor(i); };
   const max=Math.max(...per.map(p=>p.tot),1), months_with=per.filter(p=>p.tot>0).length||1;
   const fixAll=per.reduce((s,p)=>s+p.fix,0), varAll=grand-fixAll;
   const pct=v=>{ const p=v/grand*100; return p.toFixed(p<10?1:0).replace(".",",")+"%"; };
   const FIX_C="#4f8ef7", VAR_C="#f5a524";
   const bars=per.map(p=>{ let segs="";
-    if (mode==="cat"){ const parts=top.map(id=>[colorOf(id),p.rows[id]||0]); parts.push([CHART_REST,p.tot-top.reduce((s,id)=>s+(p.rows[id]||0),0)]); segs=parts.filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join(""); }
+    if (mode==="cat"){ const parts=top.map(g=>[colorOf(g),p.g[g]||0]); parts.push([CHART_REST,p.tot-top.reduce((s,g)=>s+(p.g[g]||0),0)]); segs=parts.filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join(""); }
     else segs=[[FIX_C,p.fix],[VAR_C,p.tot-p.fix]].filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join("");
     return `<button class="trow" data-trend-m="${p.m}"><span class="tm">T${Number(p.m.slice(5))}</span><span class="track"><span class="sbar" style="width:${p.tot/max*100}%">${segs}</span></span><b class="num">${p.tot?shortMoney(p.tot):"–"}</b></button>`; }).join("");
-  const legRow = ([id,v]) => { const c=catById(id), f=isFixedCat(c);
-      return `<button class="r" data-cattrend="${esc(id)}"><i style="background:${colorOf(id)}"></i><span class="t">${esc(c?.name||"Không rõ")} <em class="tag ${f?"fx":"vr"}">${f?"Cố định":"Phát sinh"}</em></span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)} · TB ${shortMoney(v/months_with)}/tháng</span></button>`; };
-  const rest=ranked.slice(6), open=!!S.homeMoreCats;
-  const legendCat = ranked.slice(0,6).map(legRow).join("")
-    + (rest.length ? `<button class="r more" id="moreCats"><i style="background:${CHART_REST}"></i><span class="t">${open?"Thu gọn":`${rest.length} hạng mục khác`} <span class="chev">${open?"▴":"▾"}</span></span><b class="num small">${pct(rest.reduce((s,r)=>s+r[1],0))}</b></button>
+  const tagOf = ids => { const f=ids.filter(id=>isFixedCat(catById(id))).length; return f===ids.length?`<em class="tag fx">Cố định</em>`:f===0?`<em class="tag vr">Phát sinh</em>`:`<em class="tag mx">Hỗn hợp</em>`; };
+  // một dòng nhóm: nhóm 1 mục thì bấm vào xem chi tiết luôn; nhóm nhiều mục thì bấm để xổ các mục con
+  const legRow = ([g,v]) => { const kids=gKids[g]||[], many=kids.length>1, open=S.homeOpenGroup===g;
+      const head = `<button class="r" ${many?`data-group="${esc(g)}"`:`data-cattrend="${esc(kids[0][0])}"`}><i style="background:${colorOf(g)}"></i><span class="t">${esc(g)} ${tagOf(kids.map(k=>k[0]))}${many?` <span class="muted small">${kids.length} mục <span class="chev">${open?"▴":"▾"}</span></span>`:""}</span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)} · TB ${shortMoney(v/months_with)}/tháng</span></button>`;
+      return head + (many&&open ? `<div class="leg kids">${kids.map(([id,kv])=>{ const c=catById(id); return `<button class="r" data-cattrend="${esc(id)}"><i style="background:${colorOf(g)};opacity:.55"></i><span class="t">${esc(c?.parent?c.name:c?.name+" (chung)")}</span><b class="num small">${fmt(kv)}</b><span class="lv num">${(kv/v*100).toFixed(0)}% của nhóm · TB ${shortMoney(kv/months_with)}/tháng</span></button>`; }).join("")}</div>` : ""); };
+  const rest=granked.slice(6), open=!!S.homeMoreCats;
+  const legendCat = granked.slice(0,6).map(legRow).join("")
+    + (rest.length ? `<button class="r more" id="moreCats"><i style="background:${CHART_REST}"></i><span class="t">${open?"Thu gọn":`${rest.length} nhóm khác`} <span class="chev">${open?"▴":"▾"}</span></span><b class="num small">${pct(rest.reduce((s,r)=>s+r[1],0))}</b></button>
       ${open?`<div class="leg morelist">${rest.map(legRow).join("")}</div>`:""}` : "");
   const fixCats=ranked.filter(([id])=>isFixedCat(catById(id)));
   const legendFix = `<div class="fxsum">
