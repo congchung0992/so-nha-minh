@@ -82,6 +82,11 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .balance .nw > div{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .balance .nw span{color:var(--muted)}
 .balance .nw b{font-weight:700;white-space:nowrap}
+.balance .nw .nwbtn{display:flex;align-items:baseline;gap:8px;width:100%;background:none;border:0;padding:4px 0;margin:-4px 0;text-align:left;font-size:inherit;transition:opacity .2s}
+.balance .nw .nwbtn span:first-child{flex:1}
+.balance .nw .nwbtn .chev{font-size:16px;line-height:1}
+.balance .nw .nwbtn:active{opacity:.6}
+.debtlist .tx .mid .t{white-space:normal;overflow-wrap:anywhere}
 .balance .pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .balance .pair > div{border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;min-width:0;background:var(--surface-2)}
 .balance .pair b{display:block;font-size:16px;word-break:break-word}
@@ -399,7 +404,7 @@ const byName = id => !id ? "" : (id===S.uid ? "Bạn" : (S.profiles[id] || "Ngư
 /* ---------- điều hướng ---------- */
 function markTab(t){ document.querySelectorAll("nav.tabs button").forEach(b=> b.dataset.tab===t ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current")); }
 function setTab(t){ S.tab=t; if(t==="add" && !S.editId) S.form=null; if(t!=="add") S.editId=null; S.confirmDel=false; markTab(t); render(); window.scrollTo(0,0); }
-document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ if(b.dataset.tab==="more") S.moreSub="menu"; setTab(b.dataset.tab); }));
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ if(b.dataset.tab==="more") S.moreSub="menu"; if(b.dataset.tab==="home") S.homeSub=null; setTab(b.dataset.tab); }));
 
 function render(){
   const v = $("#view");
@@ -408,7 +413,7 @@ function render(){
   const needSetup = !S.cats.length || !S.wallets.length;
   if (needSetup && S.tab!=="more"){ v.innerHTML = setupView(); bindSetup(); enterView("setup"); return; }
   ({home:homeView, book:bookView, add:formView, report:reportView, more:moreView})[S.tab]();
-  enterView([S.tab,S.moreSub,S.month,S.editId].join("|"));
+  enterView([S.tab,S.moreSub,S.month,S.editId,S.homeSub].join("|"));
 }
 
 /* hiệu ứng vào màn: chỉ khi đổi sang màn khác (key khác); cùng màn mà vẽ lại thì hiện ngay, không nháy */
@@ -489,7 +494,31 @@ function legend(rows,total,limit=5){
 }
 
 /* ---------- Tổng quan ---------- */
+/* bảng chi tiết khi bấm dòng "Đi vay chưa trả" / "Cho vay chưa thu" */
+function debtView(type){
+  const owe = type==="owe";
+  const inK = owe?"borrow":"lend", outK = owe?"repay":"collect";
+  const list = sortTx(S.txs.filter(t=>{ if(t.kind==="transfer") return false; const d=debtKind(catById(t.categoryId)); return d===inK||d===outK; }));
+  let a=0, b=0; list.forEach(t=>{ if(debtKind(catById(t.categoryId))===inK) a+=+t.amount; else b+=+t.amount; });
+  const left=Math.max(0,a-b);
+  $("#view").innerHTML = `<div><button class="chip" id="back">‹ Tổng quan</button></div>
+  <section class="balance">
+    <div><div class="label">${owe?"Đi vay chưa trả":"Cho vay chưa thu"}</div><div class="big num ${owe?"out-c":"in-c"}">${money(left)}</div></div>
+    <div class="nw">
+      <div><span>${owe?"Tổng đã vay":"Tổng đã cho vay"}</span><b class="num">${money(a)}</b></div>
+      <div><span>${owe?"Đã trả":"Đã thu về"}</span><b class="num">${money(b)}</b></div>
+    </div>
+  </section>
+  <section class="card" style="gap:4px"><h2>${list.length} khoản ${owe?"vay và trả nợ":"cho vay và thu nợ"}</h2>
+    <div class="list-plain debtlist">${list.map(t=>{ const c=catById(t.categoryId), inc=t.kind==="income";
+      return `<button class="tx" data-id="${esc(t.id)}">${icoHTML(catIconKey(c))}<div class="mid"><div class="t">${esc(t.note||c?.name||"")}</div><div class="s">${viDate(t.date)} · ${esc(c?.name||"")}</div></div><div class="amt num ${inc?"in-c":""}">${inc?"+":"−"}${fmt(t.amount)}</div></button>`; }).join("")}</div>
+    <p class="small muted" style="margin:6px 0 0">${owe?"Khi trả nợ, ghi một khoản <b>chi</b> vào hạng mục có chữ “Trả nợ” để số nợ giảm.":"Khi được trả, ghi một khoản <b>thu</b> vào hạng mục “Thu nợ” để số tiền cho vay giảm."} Bấm vào từng khoản để sửa.</p>
+  </section>`;
+  $("#back").onclick=()=>{ S.homeSub=null; render(); window.scrollTo(0,0); };
+  bindTxRows();
+}
 function homeView(){
+  if (S.homeSub) return debtView(S.homeSub);
   const bal = balances(); const total = Object.values(bal).reduce((a,b)=>a+b,0);
   const ym = ymOf(todayStr()); const {inc,exp} = monthTotals(ym);
   const recent = sortTx(S.txs).slice(0,5);
@@ -500,8 +529,8 @@ function homeView(){
     ${hasDebt ? `<div><div class="label">Tài sản ròng (đã trừ nợ)</div><div class="big num ${net<0?"out-c":""}">${money(net)}</div></div>
     <div class="nw">
       <div><span>Tiền trong các ví</span><b class="num">${money(total)}</b></div>
-      ${owe?`<div><span>Đi vay chưa trả</span><b class="num out-c">−${money(owe)}</b></div>`:""}
-      ${owed?`<div><span>Cho vay chưa thu</span><b class="num in-c">+${money(owed)}</b></div>`:""}
+      ${owe?`<button class="nwbtn" data-debt="owe"><span>Đi vay chưa trả</span><b class="num out-c">−${money(owe)}</b><span class="chev">›</span></button>`:""}
+      ${owed?`<button class="nwbtn" data-debt="owed"><span>Cho vay chưa thu</span><b class="num in-c">+${money(owed)}</b><span class="chev">›</span></button>`:""}
     </div>` : `<div><div class="label">Tổng số dư</div><div class="big num ${total<0?"out-c":""}">${money(total)}</div></div>`}
     <div class="pair">
       <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Thu tháng ${Number(ym.slice(5))}</span><b class="num in-c">${fmt(inc)}</b></span></div>
@@ -523,6 +552,7 @@ function homeView(){
   $("#goWallets").onclick=()=>{ S.moreSub="wallets"; setTab("more"); };
   $("#goReport").onclick=()=>{ S.month=ym; setTab("report"); };
   const gb=$("#goBook"); if(gb) gb.onclick=()=>setTab("book");
+  document.querySelectorAll("[data-debt]").forEach(b=>b.onclick=()=>{ S.homeSub=b.dataset.debt; render(); window.scrollTo(0,0); });
   bindTxRows();
 }
 function emptyTx(t,s){ return `<div class="empty"><span class="art"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-2.5-1.5L13 21l-2-1.5L8.5 21 6 19.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></svg></span><b>${t}</b><span class="small">${s}</span></div>`; }
