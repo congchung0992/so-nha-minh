@@ -178,6 +178,13 @@ select.chip{max-width:170px;padding-right:8px}
 .selbar{position:fixed;left:0;right:0;bottom:calc(98px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;justify-content:center;padding:0 12px;animation:rise .3s var(--ease-out) both}
 .selbar .in{max-width:560px;width:100%;background:var(--surface);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.28);border-radius:16px;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 body.selmode .wrap{padding-bottom:240px}
+/* vuốt để xoá */
+.swipe{position:relative;overflow:hidden;border-radius:12px}
+.swipe + .swipe{border-top:1px solid var(--line)}
+.swipe > .tx{position:relative;z-index:1;background:var(--surface);touch-action:pan-y;transition:transform .22s var(--ease-out),background-color .15s}
+.swipe > .tx.dragging{transition:none}
+.swipe > .tx + .tx{border-top:0}
+.swipe .sdel{position:absolute;top:2px;bottom:2px;right:0;width:92px;border:0;border-radius:12px;background:var(--expense);color:#fff;font-weight:800;font-size:14px}
 .listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 2px}
 .catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 6px}
 .catbtn{border:0;background:none;border-radius:14px;padding:8px 2px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;text-align:center;min-width:0;font-weight:500}
@@ -670,9 +677,36 @@ function markSel(){ document.querySelectorAll(".tx[data-id]").forEach(b=>{ b.cla
 function bindTxRows(){
   const sm=$("#selMode"); if(sm) sm.onclick=()=>{ S.sel=S.sel?null:new Set(); sm.textContent=S.sel?"Xong":"☑ Chọn nhiều"; markSel(); };
   if (S.sel) markSel();
-  document.querySelectorAll(".tx[data-id]").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tx[data-id]").forEach(b=>{ enableSwipe(b); b.onclick=()=>{
+  if (b.dataset.swiped){ delete b.dataset.swiped; return; }          // vừa vuốt, không tính là bấm
+  if (b.classList.contains("open")){ closeSwipes(); return; }
   if (S.sel){ const id=b.dataset.id; S.sel.has(id)?S.sel.delete(id):S.sel.add(id); markSel(); return; }
-  const t=S.txs.find(x=>x.id===b.dataset.id); if(!t) return; S.editId=t.id; S.form={...t}; S.tab="add"; markTab("add"); render(); window.scrollTo(0,0); }); }
+  const t=S.txs.find(x=>x.id===b.dataset.id); if(!t) return; S.editId=t.id; S.form={...t}; S.tab="add"; markTab("add"); render(); window.scrollTo(0,0); }; }); }
+
+/* vuốt một khoản sang trái → hiện nút Xoá đỏ phía sau; bấm Xoá để xoá ngay */
+const SWIPE_W=92;
+function closeSwipes(except){ document.querySelectorAll(".swipe > .tx.open").forEach(r=>{ if(r!==except){ r.classList.remove("open"); r.style.transform=""; } }); }
+function enableSwipe(row){
+  if (S.canWrite===false) return;
+  let wrap=row.parentElement;
+  if (!wrap.classList.contains("swipe")){
+    wrap=document.createElement("div"); wrap.className="swipe"; row.before(wrap);
+    const del=document.createElement("button"); del.className="sdel"; del.type="button"; del.innerHTML="Xoá"; del.setAttribute("aria-label","Xoá khoản này");
+    wrap.append(del, row);
+    del.onclick=async()=>{ const id=row.dataset.id; del.disabled=true; del.textContent="…";
+      try{ await S.db.doc("tx/"+id).delete(); S.sel&&S.sel.delete(id); toast("Đã xoá"); render(); }catch(e){ handleWriteErr(e); del.disabled=false; del.textContent="Xoá"; } };
+  }
+  let x0=0, y0=0, dx=0, mode=null, base=0;
+  row.onpointerdown=e=>{ if(S.sel || e.button>0) return; x0=e.clientX; y0=e.clientY; dx=0; mode="maybe"; base=row.classList.contains("open")?-SWIPE_W:0; };
+  row.onpointermove=e=>{ if(!mode) return; const mx=e.clientX-x0, my=e.clientY-y0;
+    if (mode==="maybe"){ if(Math.abs(my)>10 && Math.abs(my)>Math.abs(mx)){ mode=null; return; } if(Math.abs(mx)<10) return; mode="drag"; row.classList.add("dragging"); closeSwipes(row); try{ row.setPointerCapture(e.pointerId); }catch(_){} }
+    dx=mx; const x=Math.min(0,Math.max(base+dx,-SWIPE_W*1.6)); row.style.transform=`translateX(${x}px)`; };
+  const end=()=>{ if(mode==="drag"){ row.classList.remove("dragging"); row.dataset.swiped="1"; setTimeout(()=>delete row.dataset.swiped,350);
+      const open = base+dx < -SWIPE_W/2; row.classList.toggle("open",open); row.style.transform=open?`translateX(-${SWIPE_W}px)`:""; }
+    mode=null; };
+  row.onpointerup=end; row.onpointercancel=end;
+}
+document.addEventListener("pointerdown",e=>{ if(!e.target.closest(".swipe")) closeSwipes(); },true);
 
 /* ---------- Sổ ---------- */
 function monthBar(){ return `<div class="monthbar"><button class="iconbtn" id="mPrev" aria-label="Tháng trước">${SVG_PREV}</button><strong>${esc(monthLabel(S.month))}</strong><button class="iconbtn" id="mNext" aria-label="Tháng sau">${SVG_NEXT}</button></div>`; }
