@@ -169,6 +169,16 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .quick{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
 .quick::-webkit-scrollbar{display:none}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;white-space:nowrap;flex:none}
+.chip.danger{color:var(--expense);border-color:var(--expense)} .chip:disabled{opacity:.45}
+select.chip{max-width:170px;padding-right:8px}
+/* chọn nhiều */
+.tx.selectable::before{content:"";width:22px;height:22px;border-radius:7px;border:2px solid var(--muted);flex:none;display:grid;place-items:center;font-size:14px;font-weight:900;color:#fff;transition:background-color .15s,border-color .15s}
+.tx.selectable.on::before{content:"✓";background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tx.selectable.on{background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:12px}
+.selbar{position:fixed;left:0;right:0;bottom:calc(98px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;justify-content:center;padding:0 12px;animation:rise .3s var(--ease-out) both}
+.selbar .in{max-width:560px;width:100%;background:var(--surface);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.28);border-radius:16px;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+body.selmode .wrap{padding-bottom:240px}
+.listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 2px}
 .catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 6px}
 .catbtn{border:0;background:none;border-radius:14px;padding:8px 2px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;text-align:center;min-width:0;font-weight:500}
 .catbtn span.n{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25;min-height:2.5em}
@@ -426,8 +436,10 @@ function render(){
   if (!(S.ready.w && S.ready.c && S.ready.t)) return;
   const needSetup = !S.cats.length || !S.wallets.length;
   if (needSetup && S.tab!=="more"){ v.innerHTML = setupView(); bindSetup(); enterView("setup"); return; }
+  const vkey=[S.tab,S.moreSub,S.month,S.editId,S.homeSub,S.repCat].join("|");
+  if (vkey!==lastViewKey) S.sel=null;   // sang màn khác thì thoát chế độ chọn nhiều
   ({home:homeView, book:bookView, add:formView, report:reportView, more:moreView})[S.tab]();
-  enterView([S.tab,S.moreSub,S.month,S.editId,S.homeSub,S.repCat].join("|"));
+  enterView(vkey); renderSelBar();
 }
 
 /* hiệu ứng vào màn: chỉ khi đổi sang màn khác (key khác); cùng màn mà vẽ lại thì hiện ngay, không nháy */
@@ -518,7 +530,7 @@ function debtView(type){
   const list = sortTx(S.txs.filter(t=>{ if(t.kind==="transfer") return false; const d=debtKind(catById(t.categoryId)); return d===inK||d===outK; }));
   let a=0, b=0; list.forEach(t=>{ if(debtKind(catById(t.categoryId))===inK) a+=+t.amount; else b+=+t.amount; });
   const left=Math.max(0,a-b);
-  $("#view").innerHTML = `<div><button class="chip" id="back">‹ Tổng quan</button></div>
+  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Tổng quan</button>${list.length?selToggleBtn():""}</div>
   <section class="balance">
     <div><div class="label">${owe?"Đi vay chưa trả":"Cho vay chưa thu"}</div><div class="big num ${owe?"out-c":"in-c"}">${money(left)}</div></div>
     <div class="nw">
@@ -568,7 +580,7 @@ function walletTxView(id){
   lines.sort((x,y)=> x.t.date===y.t.date ? (x.t.createdAt||0)-(y.t.createdAt||0) : (x.t.date<y.t.date?-1:1));
   let bal=Number(w.initial)||0; lines.forEach(l=>{ bal+=l.d; l.bal=bal; }); lines.reverse();
   const groups={}; lines.forEach(l=>(groups[l.t.date]=groups[l.t.date]||[]).push(l));
-  $("#view").innerHTML = `<div><button class="chip" id="back">‹ Các ví</button></div>
+  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Các ví</button>${lines.length?selToggleBtn():""}</div>
   <section class="balance"><div class="row">${icoHTML(walletIconKey(w),"lg")}<div style="min-width:0"><div class="label">${esc(w.name)}</div><div class="big num ${bal<0?"out-c":""}">${money(bal)}</div></div></div>
     <div class="nw"><div><span>Số dư ban đầu</span><b class="num">${money(Number(w.initial)||0)}</b></div><div><span>Số khoản</span><b class="num">${lines.length}</b></div></div></section>
   ${lines.length ? Object.keys(groups).map(d=>`<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span></div><div class="list-plain">${groups[d].map(l=>{ const c=catById(l.t.categoryId);
@@ -627,7 +639,40 @@ function txRow(t){
   const sign = t.kind==="income"?"+":t.kind==="expense"?"−":"";
   return `<button class="tx" data-id="${esc(t.id)}">${icoHTML(t.kind==="transfer"?"transfer":catIconKey(c))}<div class="mid"><div class="t">${esc(title)}</div><div class="s">${esc(sub)}</div></div><div class="amt num ${cls}">${sign}${fmt(t.amount)}</div></button>`;
 }
-function bindTxRows(){ document.querySelectorAll(".tx[data-id]").forEach(b=>b.onclick=()=>{ const t=S.txs.find(x=>x.id===b.dataset.id); if(!t) return; S.editId=t.id; S.form={...t}; S.tab="add"; markTab("add"); render(); window.scrollTo(0,0); }); }
+/* ---------- chọn nhiều khoản để xoá / đổi hạng mục ---------- */
+const selToggleBtn = () => `<button class="chip" id="selMode">${S.sel?"Xong":"☑ Chọn nhiều"}</button>`;
+function renderSelBar(){
+  let bar=$(".selbar");
+  if (!S.sel){ if(bar) bar.remove(); document.body.classList.remove("selmode"); return; }
+  if (!bar){ bar=document.createElement("div"); bar.className="selbar"; document.body.appendChild(bar); }
+  document.body.classList.add("selmode");
+  const ids=[...S.sel].filter(id=>S.txs.some(t=>t.id===id)); const n=ids.length;
+  const visible=[...document.querySelectorAll(".tx[data-id]")].map(b=>b.dataset.id);
+  const allOn=visible.length && visible.every(id=>S.sel.has(id));
+  const kinds=new Set(ids.map(id=>S.txs.find(t=>t.id===id)?.kind)); const k=kinds.size===1?[...kinds][0]:null;
+  const cats=(k==="income"||k==="expense") ? S.cats.filter(c=>c.kind===k).sort((a,b)=>strip(a.name)<strip(b.name)?-1:1) : [];
+  const sum=ids.reduce((s,id)=>s+(+S.txs.find(t=>t.id===id).amount||0),0);
+  bar.innerHTML=`<div class="in">
+    <div class="small" style="flex:1;min-width:120px">${n?`Đã chọn <b>${n}</b> khoản · <b class="num">${fmt(sum)}</b>`:"Bấm vào các khoản để chọn"}</div>
+    <button class="chip" id="selAll">${allOn?"Bỏ chọn hết":"Chọn tất cả"}</button>
+    ${cats.length?`<select class="chip" id="selCat" aria-label="Đổi hạng mục"><option value="">Đổi hạng mục…</option>${cats.map(c=>`<option value="${esc(c.id)}">${esc(c.parent?c.parent+" › "+c.name:c.name)}</option>`).join("")}</select>`:""}
+    <button class="chip danger" id="selDel" ${n?"":"disabled"}>Xoá</button>
+  </div>`;
+  $("#selAll").onclick=()=>{ visible.forEach(id=> allOn?S.sel.delete(id):S.sel.add(id)); markSel(); };
+  const sc=$("#selCat"); if(sc) sc.onchange=async()=>{ const cid=sc.value; if(!cid) return; sc.disabled=true;
+    try{ await S.db.updateIds("tx",ids,{categoryId:cid,updatedBy:S.uid||"",updatedAt:Date.now()}); toast(`Đã chuyển ${n} khoản sang ${catById(cid)?.name||"hạng mục mới"}`); S.sel=new Set(); render(); }catch(e){ handleWriteErr(e); sc.disabled=false; } };
+  const del=$("#selDel"); del.onclick=async()=>{
+    if (!del.dataset.armed){ del.dataset.armed="1"; del.textContent=`Bấm lần nữa để xoá ${n} khoản`; return; }
+    del.disabled=true; del.textContent="Đang xoá…";
+    try{ await S.db.deleteIds("tx",ids); toast(`Đã xoá ${n} khoản`); S.sel=new Set(); render(); }catch(e){ handleWriteErr(e); renderSelBar(); } };
+}
+function markSel(){ document.querySelectorAll(".tx[data-id]").forEach(b=>{ b.classList.toggle("selectable",!!S.sel); b.classList.toggle("on",!!S.sel&&S.sel.has(b.dataset.id)); b.setAttribute("aria-pressed",!!S.sel&&S.sel.has(b.dataset.id)); }); renderSelBar(); }
+function bindTxRows(){
+  const sm=$("#selMode"); if(sm) sm.onclick=()=>{ S.sel=S.sel?null:new Set(); sm.textContent=S.sel?"Xong":"☑ Chọn nhiều"; markSel(); };
+  if (S.sel) markSel();
+  document.querySelectorAll(".tx[data-id]").forEach(b=>b.onclick=()=>{
+  if (S.sel){ const id=b.dataset.id; S.sel.has(id)?S.sel.delete(id):S.sel.add(id); markSel(); return; }
+  const t=S.txs.find(x=>x.id===b.dataset.id); if(!t) return; S.editId=t.id; S.form={...t}; S.tab="add"; markTab("add"); render(); window.scrollTo(0,0); }); }
 
 /* ---------- Sổ ---------- */
 function monthBar(){ return `<div class="monthbar"><button class="iconbtn" id="mPrev" aria-label="Tháng trước">${SVG_PREV}</button><strong>${esc(monthLabel(S.month))}</strong><button class="iconbtn" id="mNext" aria-label="Tháng sau">${SVG_NEXT}</button></div>`; }
@@ -648,6 +693,7 @@ function bookView(){
       <div class="leg">${top.map(([id,v],i)=>{ const c=catById(id); return `<button class="r" data-catd="${esc(id)}"><i style="background:${rankColor(i)}"></i><span class="t">${esc(c?.name||"Không rõ")}</span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)}</span></button>`; }).join("")}
       ${rest>0?`<div class="r"><i style="background:${CHART_REST}"></i><span class="t">${rows.length-6} hạng mục khác</span><b class="num small">${pct(rest)}</b><span class="lv num">${fmt(rest)}</span></div>`:""}</div></div>
     </section>`; })() : ""}
+  ${list.length ? `<div class="listhead"><h2>${list.length} khoản trong tháng</h2>${selToggleBtn()}</div>` : ""}
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const net=g.reduce((s,t)=>s+(t.kind==="income"?+t.amount:t.kind==="expense"?-t.amount:0),0);
     return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num">${net<0?"−":"+"}${fmt(Math.abs(net))}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
     : `<div class="card">${emptyTx("Tháng này chưa có ghi chép","Chuyển sang tháng khác hoặc bấm + để ghi.")}</div>`}`;
@@ -757,7 +803,7 @@ function catDetailView(){
   const list=sortTx(S.txs.filter(t=>t.categoryId===S.repCat && ymOf(t.date)===S.month && t.kind!=="transfer"));
   const sum=list.reduce((s,t)=>s+(+t.amount),0); const {inc,exp}=monthTotals(S.month); const all=kind==="income"?inc:exp;
   const groups={}; list.forEach(t=>(groups[t.date]=groups[t.date]||[]).push(t));
-  $("#view").innerHTML = `<div><button class="chip" id="back">‹ Báo cáo</button></div>${monthBar()}
+  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Báo cáo</button>${list.length?selToggleBtn():""}</div>${monthBar()}
   <section class="balance"><div class="row">${icoHTML(catIconKey(c),"lg")}<div style="min-width:0"><div class="label">${esc(c?.parent?c.parent+" › ":"")}${esc(c?.name||"Không rõ")}</div><div class="big num ${kind==="income"?"in-c":"out-c"}">${money(sum)}</div></div></div>
     <div class="nw"><div><span>Số khoản</span><b class="num">${list.length}</b></div>
     <div><span>Chiếm trong ${kind==="income"?"tổng thu":"tổng chi"} ${monthLabel(S.month).toLowerCase()}</span><b class="num">${all?(sum/all*100).toFixed(1).replace(".",","):0}%</b></div>
@@ -1528,6 +1574,15 @@ function makeDb(sb, hid){
       let done=0; for(let i=0;i<docs.length;i+=300){ const chunk=docs.slice(i,i+300).map(d=>({...toRow(col,d), id:d.id, household_id:hid}));
         const {data,error}=await sb.from(col).upsert(chunk,{onConflict:"id",ignoreDuplicates:true}).select(); if(error) throw mapErr(error);
         (data||[]).forEach(r=>store[col].set(r.id,fromRow(col,r))); done+=chunk.length; onProgress&&onProgress(done); }
+      emit(col);
+    },
+    async deleteIds(col, ids){
+      for(let i=0;i<ids.length;i+=200){ const chunk=ids.slice(i,i+200); const {error}=await sb.from(col).delete().eq("household_id",hid).in("id",chunk); if(error) throw mapErr(error); chunk.forEach(id=>store[col].delete(id)); }
+      emit(col);
+    },
+    async updateIds(col, ids, patch){
+      const row=toRow(col,patch);
+      for(let i=0;i<ids.length;i+=200){ const chunk=ids.slice(i,i+200); const {data,error}=await sb.from(col).update(row).eq("household_id",hid).in("id",chunk).select(); if(error) throw mapErr(error); (data||[]).forEach(r=>store[col].set(r.id,fromRow(col,r))); }
       emit(col);
     },
     async deleteWhere(col, field, value){ const {error}=await sb.from(col).delete().eq("household_id",hid).eq(field,value); if(error) throw mapErr(error); for(const [id,o] of store[col]) if(o[Object.keys(MAP[col]).find(k=>MAP[col][k]===field)]===value) store[col].delete(id); emit(col); },
