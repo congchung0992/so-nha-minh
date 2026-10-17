@@ -122,6 +122,8 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .leg .r{flex-wrap:wrap;row-gap:0}
 .leg button.r{background:none;border:0;padding:2px 0;margin:-2px 0;width:100%;text-align:left;color:inherit;border-radius:8px;transition:opacity .2s}
 .leg button.r:active{opacity:.6}
+@keyframes flash{0%,100%{background:transparent}30%{background:var(--accent-soft)}}
+.flash{animation:flash 1.2s ease;border-radius:12px}
 /* chi tiêu 6 tháng: mỗi tháng một thanh ngang chia màu */
 .trend{display:flex;flex-direction:column;gap:8px}
 .trow{display:grid;grid-template-columns:30px 1fr 64px;align-items:center;gap:8px;background:none;border:0;padding:0;color:inherit;text-align:left}
@@ -932,7 +934,7 @@ function walletsView(){
   $("#view").innerHTML = `${backBtn()}
   <section class="card" style="gap:0"><h2 style="margin-bottom:6px">Ví và tài khoản</h2>
    ${ws.map(w=>{ const used=S.txs.some(t=>t.walletId===w.id||t.toWalletId===w.id);
-     return `<div class="menuitem">${icoHTML(walletIconKey(w))}<div class="mid"><div style="font-weight:600">${esc(w.name)}</div><div class="s num">Hiện có ${money(bal[w.id])} · ban đầu ${fmt(w.initial)}</div></div><button class="chip" data-edit="${esc(w.id)}">Sửa</button>${used?"":`<button class="chip" data-del="${esc(w.id)}">Xoá</button>`}</div>`; }).join("")}
+     return `<div class="menuitem">${icoHTML(walletIconKey(w))}<div class="mid"><div style="font-weight:600">${esc(w.name)}</div><div class="s num">Hiện có ${money(bal[w.id])} · ban đầu ${fmt(w.initial)}</div></div><span class="row" style="gap:6px;flex:none">${used&&ws.length>1?`<button class="chip" data-merge="${esc(w.id)}">Gộp</button>`:""}<button class="chip" data-edit="${esc(w.id)}">Sửa</button>${used?"":`<button class="chip" data-del="${esc(w.id)}">Xoá</button>`}</span></div>`; }).join("")}
   </section>
   <section class="card"><h2 id="wTitle">Thêm ví</h2>
     <div class="field"><label for="wName">Tên ví</label><input class="input" id="wName" maxlength="40" placeholder="Ví dụ: Vietcombank của vợ"></div>
@@ -956,9 +958,14 @@ function walletsView(){
   $("#wReset").onclick=reset;
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const w=walletById(b.dataset.edit); editing=w.id; $("#wTitle").textContent="Sửa ví “"+w.name+"”"; $("#wSave").textContent="Lưu ví"; $("#wReset").hidden=false; $("#wName").value=w.name; wi.value=w.initial?fmt(w.initial):""; $("#wType").value=w.type||"cash";
     const others=ws.filter(x=>x.id!==w.id); mg.hidden=!others.length;
-    mgTo.innerHTML=others.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join(""); mgGo.textContent="Gộp ví"; delete mgGo.dataset.armed;
+    const cnt=id=>S.txs.filter(t=>t.walletId===id||t.toWalletId===id).length;
+    mgTo.innerHTML=others.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${cnt(x.id)} khoản)</option>`).join("");
+    if (others.length) mgTo.value=others.slice().sort((a,b)=>cnt(b.id)-cnt(a.id))[0].id;   // mặc định gộp vào ví nhiều khoản nhất
+    mgGo.textContent="Gộp ví"; delete mgGo.dataset.armed;
     $("#wTitle").scrollIntoView({block:"start",behavior:"smooth"}); });
   mgTo.onchange=()=>{ mgGo.textContent="Gộp ví"; delete mgGo.dataset.armed; };
+  document.querySelectorAll("[data-merge]").forEach(b=>b.onclick=()=>{ document.querySelector(`[data-edit="${b.dataset.merge}"]`).click();
+    setTimeout(()=>{ mg.scrollIntoView({block:"center",behavior:"smooth"}); mg.classList.remove("flash"); void mg.offsetWidth; mg.classList.add("flash"); },60); });
   mgGo.onclick=async()=>{ const src=walletById(editing), dst=walletById(mgTo.value); if(!src||!dst) return;
     const n=S.txs.filter(t=>t.walletId===src.id||t.toWalletId===src.id).length;
     if (!mgGo.dataset.armed){ mgGo.dataset.armed="1"; mgGo.textContent=`Bấm lần nữa: gộp ${n} khoản của “${src.name}” vào “${dst.name}”`; return; }
