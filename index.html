@@ -725,6 +725,18 @@ async function swipeDeleteCat(row, wrap){
     undoToast(`Đã xoá ${list.length} khoản ${catById(cid)?.name||""} · ${fmt(sum)}`, ()=>S.db.bulkInsert("tx", keep));
   }catch(e){ handleWriteErr(e); render(); }
 }
+/* vuốt một dòng người nhận ở Báo cáo → xoá mọi khoản với người đó trong tháng đang xem */
+async function swipeDeleteParty(row, wrap){
+  const party=row.dataset.party||"", kind=S.repKind||"expense";
+  const list=S.txs.filter(t=>t.kind===kind && ymOf(t.date)===S.month && isRealFlow(t) && partyOf(t)===party);
+  if (!list.length){ row.style.transform=""; wrap.classList.remove("armed"); return; }
+  const keep=list.map(t=>({...t})), sum=list.reduce((s,t)=>s+(+t.amount||0),0);
+  row.style.transform="translateX(-110%)"; wrap.style.height=wrap.offsetHeight+"px"; void wrap.offsetHeight; wrap.classList.add("gone");
+  try{
+    await S.db.deleteIds("tx", list.map(t=>t.id));
+    undoToast(`Đã xoá ${list.length} khoản · ${party||partyNone(kind)} · ${fmt(sum)}`, ()=>S.db.bulkInsert("tx", keep));
+  }catch(e){ handleWriteErr(e); render(); }
+}
 async function swipeDelete(row, wrap){
   const id=row.dataset.id; const t=S.txs.find(x=>x.id===id); if(!t) return;
   const keep={...t}; delete keep.id;
@@ -894,7 +906,8 @@ function reportView(){
   document.querySelectorAll("[data-ym]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.ym; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-rk]").forEach(b=>b.onclick=()=>{ S.repKind=b.dataset.rk; reportView(); });
   document.querySelectorAll("[data-rg]").forEach(b=>b.onclick=()=>{ S.repGroup=b.dataset.rg; reportView(); });
-  document.querySelectorAll("[data-party]").forEach(b=>b.onclick=()=>{ S.repParty=b.dataset.party||"\u0000"; render(); window.scrollTo(0,0); });
+  document.querySelectorAll("[data-party]").forEach(b=>{ enableSwipe(b, swipeDeleteParty, "Xoá cả người này");
+    b.onclick=()=>{ if (b.dataset.swiped){ delete b.dataset.swiped; return; } S.repParty=b.dataset.party||"\u0000"; render(); window.scrollTo(0,0); }; });
   bindCatDetail();
 }
 /* bấm một hạng mục (biểu đồ tròn hoặc danh sách) → các khoản của hạng mục đó trong tháng */
