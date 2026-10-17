@@ -405,8 +405,11 @@ function debts(){
   for (const t of S.txs){ if(t.kind==="transfer") continue; const d=debtKind(catById(t.categoryId)); if(d) k[d]+=Number(t.amount)||0; }
   return { owe:Math.max(0,k.borrow-k.repay), owed:Math.max(0,k.lend-k.collect) };
 }
-function monthTotals(ym){ let inc=0, exp=0; for (const t of S.txs){ if (ymOf(t.date)!==ym) continue; if(t.kind==="income") inc+=+t.amount; else if(t.kind==="expense") exp+=+t.amount; } return {inc, exp}; }
-function byCategory(ym, kind){ const m={}; S.txs.forEach(t=>{ if(t.kind===kind && ymOf(t.date)===ym) m[t.categoryId]=(m[t.categoryId]||0)+(+t.amount); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); }
+/* thu chi thật: bỏ chuyển giữa ví, đi vay / cho vay / trả nợ / thu nợ và điều chỉnh số dư (chỉ là tiền đổi chỗ, không phải kiếm được hay tiêu mất) */
+const isAdjust = t => /dieu chinh so du/.test(strip(t.note));
+const isRealFlow = t => (t.kind==="income"||t.kind==="expense") && !debtKind(catById(t.categoryId)) && !isAdjust(t);
+function monthTotals(ym){ let inc=0, exp=0; for (const t of S.txs){ if (ymOf(t.date)!==ym || !isRealFlow(t)) continue; if(t.kind==="income") inc+=+t.amount; else exp+=+t.amount; } return {inc, exp}; }
+function byCategory(ym, kind){ const m={}; S.txs.forEach(t=>{ if(t.kind===kind && ymOf(t.date)===ym && isRealFlow(t)) m[t.categoryId]=(m[t.categoryId]||0)+(+t.amount); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); }
 const sortTx = arr => arr.slice().sort((a,b)=> a.date===b.date ? (b.createdAt||0)-(a.createdAt||0) : (a.date<b.date?1:-1));
 
 const byName = id => !id ? "" : (id===S.uid ? "Bạn" : (S.profiles[id] || "Người nhà"));
@@ -740,7 +743,7 @@ function reportView(){
   </section>
   ${rows.length?`<section class="card"><h2>${kind==="income"?"Thu":"Chi"} theo hạng mục</h2>${rows.map(([id,v],i)=>{ const c=catById(id); const p=total?v/total*100:0;
     return `<button class="catrow" data-catd="${esc(id)}" style="--c:${rankColor(i)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b>${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")}</section>`:""}
-  <section class="card"><h2>Thu chi ${N} tháng</h2>${table}</section>`;
+  <section class="card"><h2>Thu chi ${N} tháng</h2>${table}<p class="small muted" style="margin:0">Chỉ tính tiền thật sự kiếm được và tiêu mất. Không tính chuyển giữa các ví, đi vay, cho vay, trả nợ, thu nợ và điều chỉnh số dư. Các khoản này vẫn có trong sổ và số dư ví.</p></section>`;
   bindMonthBar();
   document.querySelectorAll("[data-ym]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.ym; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-rk]").forEach(b=>b.onclick=()=>{ S.repKind=b.dataset.rk; reportView(); });
