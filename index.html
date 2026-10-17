@@ -579,6 +579,7 @@ function moreView(){
   if (sub==="wallets") return walletsView();
   if (sub==="cats") return catsView();
   if (sub==="import") return importView();
+  if (sub==="password") return passwordView(false);
   const mi=(go,key,t,s)=>`<button class="menuitem" ${go}>${icoHTML(key)}<div class="mid"><div style="font-weight:600">${t}</div><div class="s">${s}</div></div><span class="chev">›</span></button>`;
   $("#view").innerHTML = `
   <section class="card" style="gap:0"><h2 style="margin-bottom:6px">Thiết lập sổ</h2>
@@ -602,6 +603,7 @@ function householdCard(){
     </div>
     <div class="list-plain">${S.members.map(m=>`<div class="menuitem" style="padding:8px 0">${icoHTML(m.role==="owner"?"star":"family","sm")}<div class="mid"><div style="font-weight:600">${esc(m.display_name||"Người nhà")}${m.user_id===S.uid?" (bạn)":""}</div><div class="s">${m.role==="owner"?"Chủ sổ":"Thành viên"}</div></div></div>`).join("")}</div>
     <div class="field"><label for="myName">Tên hiển thị của bạn</label><input class="input" id="myName" maxlength="30" value="${esc(me?.display_name||"")}"></div>
+    <button class="btn ghost" id="chPass">Đổi mật khẩu</button>
     <button class="btn ghost" id="signOut2">Đăng xuất (${esc(S.email)})</button>
   </section>`;
 }
@@ -610,6 +612,7 @@ function bindHouseholdCard(){
   const cc=$("#copyCode"); if(cc) cc.onclick=async()=>{ const text=`Vào Sổ Nhà Mình để cùng ghi thu chi: ${location.origin}\nMã mời: ${h.join_code}`; try{ await navigator.clipboard.writeText(text); toast("Đã sao chép lời mời, dán gửi qua Zalo nhé"); }catch(e){ toast("Mã mời: "+h.join_code); } };
   const rc=$("#rotCode"); if(rc) rc.onclick=async()=>{ if(!rc.dataset.armed){ rc.dataset.armed="1"; rc.textContent="Bấm lần nữa để đổi"; return; } const {data,error}=await S.sb.rpc("rotate_join_code",{p_household:S.hid}); if(error){ toast("Chưa đổi được mã."); return; } S.household={...h,join_code:data}; toast("Đã đổi mã mời, mã cũ hết hiệu lực"); render(); };
   const mn=$("#myName"); if(mn) mn.onchange=async()=>{ const v=mn.value.trim(); if(!v) return; const {error}=await S.sb.from("members").update({display_name:v}).eq("household_id",S.hid).eq("user_id",S.uid); if(error){ toast("Chưa lưu được tên."); return; } toast("Đã đổi tên"); loadMembers(); };
+  $("#chPass").onclick=()=>{ S.moreSub="password"; S.backTo=null; render(); window.scrollTo(0,0); };
   $("#signOut2").onclick=signOut;
 }
 function backBtn(){ return `<div><button class="chip" id="back">‹ ${S.backTo==="add"?"Quay lại ghi chép":"Cài đặt"}</button></div>`; }
@@ -1029,7 +1032,7 @@ function authView(msg){
     ${msg?`<div class="note">${msg}</div>`:""}
     <div class="err" id="aErr" role="alert"></div>
     <button class="btn" id="aGo">${mode==="signup"?"Tạo tài khoản":"Đăng nhập"}</button>
-    <button class="link" id="aMagic" style="align-self:center">Quên mật khẩu? Gửi link đăng nhập qua email</button>
+    ${mode==="login"?`<button class="link" id="aReset" style="align-self:center">Quên mật khẩu? Đặt lại qua email</button>`:""}
   </section>`;
   document.querySelectorAll("[data-am]").forEach(b=>b.onclick=()=>{ S.lastEmail=$("#aEmail").value; S.authMode=b.dataset.am; authView(); });
   const go=$("#aGo"), err=$("#aErr");
@@ -1042,9 +1045,35 @@ function authView(msg){
     if (res.error){ const m=res.error.message||""; err.textContent = /invalid login/i.test(m)?"Sai email hoặc mật khẩu.": /not confirmed/i.test(m)?"Email chưa xác nhận. Mở hộp thư và bấm link xác nhận trước.": /already registered/i.test(m)?"Email này đã có tài khoản, chuyển sang Đăng nhập.": "Không đăng nhập được: "+m; return; }
     if (mode==="signup" && !res.data.session){ S.authMode="login"; authView("Đã gửi email xác nhận tới <b>"+esc(email)+"</b>. Mở hộp thư, bấm link xác nhận rồi quay lại đây đăng nhập."); }
   };
-  $("#aMagic").onclick=async()=>{ const email=$("#aEmail").value.trim(); if(!/^\S+@\S+\.\S+$/.test(email)){ err.textContent="Nhập email trước rồi bấm lại."; return; }
-    const {error}=await S.sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
-    if(error){ err.textContent="Chưa gửi được: "+error.message; return; } authView("Đã gửi link đăng nhập tới <b>"+esc(email)+"</b>. Mở email trên máy này và bấm link."); };
+  const rs=$("#aReset"); if(rs) rs.onclick=async()=>{ const email=$("#aEmail").value.trim(); S.lastEmail=email; if(!/^\S+@\S+\.\S+$/.test(email)){ err.textContent="Nhập email trước rồi bấm lại."; return; }
+    rs.disabled=true;
+    const {error}=await S.sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+    rs.disabled=false;
+    if(error){ err.textContent=/rate limit|seconds/i.test(error.message)?"Vừa gửi rồi, đợi một lát rồi thử lại.":"Chưa gửi được: "+error.message; return; }
+    authView("Đã gửi link đặt lại mật khẩu tới <b>"+esc(email)+"</b>. Mở email, bấm link rồi nhập mật khẩu mới."); };
+}
+
+/* màn đặt mật khẩu mới: sau khi bấm link quên mật khẩu, hoặc tự đổi trong Cài đặt */
+function passwordView(fromRecovery){
+  $("#view").innerHTML = `${fromRecovery?"":backBtn()}<section class="card">
+    <div class="empty" style="padding-bottom:0"><span class="art"><svg viewBox="0 0 24 24"><path d="M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>${fromRecovery?"Đặt mật khẩu mới":"Đổi mật khẩu"}</b><span class="small">${esc(S.email||"")}</span></div>
+    <div class="field"><label for="pNew">Mật khẩu mới</label><input class="input" id="pNew" type="password" autocomplete="new-password" placeholder="Ít nhất 6 ký tự"></div>
+    <div class="field"><label for="pNew2">Nhập lại mật khẩu mới</label><input class="input" id="pNew2" type="password" autocomplete="new-password"></div>
+    <div class="err" id="pErr" role="alert"></div>
+    <button class="btn" id="pGo">Lưu mật khẩu</button>
+  </section>`;
+  if(!fromRecovery) bindBack();
+  const go=$("#pGo"), err=$("#pErr");
+  go.onclick=async()=>{ const p=$("#pNew").value, p2=$("#pNew2").value; err.textContent="";
+    if(p.length<6){ err.textContent="Mật khẩu cần ít nhất 6 ký tự."; return; }
+    if(p!==p2){ err.textContent="Hai lần nhập không khớp."; return; }
+    go.disabled=true; go.textContent="Đang lưu…";
+    const {error}=await S.sb.auth.updateUser({password:p});
+    go.disabled=false; go.textContent="Lưu mật khẩu";
+    if(error){ const m=error.message||""; err.textContent=/different from the old/i.test(m)?"Mật khẩu mới phải khác mật khẩu cũ.":/weak|short/i.test(m)?"Mật khẩu quá yếu, chọn mật khẩu dài hơn.":"Chưa đổi được: "+m; return; }
+    toast("Đã lưu mật khẩu mới");
+    if(fromRecovery){ S.recovery=false; chooseHousehold(); } else { S.moreSub="menu"; render(); }
+  };
 }
 
 /* màn chọn / tạo / tham gia nhà */
@@ -1105,14 +1134,21 @@ document.addEventListener("focusout",()=>setTimeout(()=>{ if(pendingRender && !i
 async function boot(){
   document.querySelector("nav.tabs").hidden=true;
   if (!CFG.supabaseUrl || !CFG.supabaseAnonKey || !window.supabase){ $("#view").innerHTML=`<div class="card"><h2>Chưa cấu hình kết nối</h2><p class="small muted">Thiếu địa chỉ Supabase trong file config.js.</p></div>`; return; }
+  // link "quên mật khẩu" quay về với #...type=recovery; supabase-js xoá hash khi đọc nên phải nhận biết trước
+  S.recovery = /type=recovery/.test(location.hash);
   S.sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   let started=false;
   const onSession=async session=>{
     if (!session){ started=false; document.querySelector("nav.tabs").hidden=true; authView(); return; }
     if (started) return; started=true;
-    S.uid=session.user.id; S.email=session.user.email; chooseHousehold();
+    S.uid=session.user.id; S.email=session.user.email;
+    if (S.recovery) return passwordView(true);
+    chooseHousehold();
   };
-  S.sb.auth.onAuthStateChange((_e,session)=>{ setTimeout(()=>onSession(session),0); });
+  S.sb.auth.onAuthStateChange((e,session)=>{
+    if (e==="PASSWORD_RECOVERY"){ S.recovery=true; if(session){ S.uid=session.user.id; S.email=session.user.email; started=true; setTimeout(()=>passwordView(true),0); } return; }
+    setTimeout(()=>onSession(session),0);
+  });
   const {data}=await S.sb.auth.getSession(); onSession(data.session);
 }
 boot();
