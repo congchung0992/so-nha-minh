@@ -180,9 +180,9 @@ select.chip{max-width:170px;padding-right:8px}
 body.selmode .wrap{padding-bottom:240px}
 /* vuốt để xoá */
 .swipe{position:relative;overflow:hidden;border-radius:12px}
-.swipe + .swipe{border-top:1px solid var(--line)}
-.swipe > .tx{position:relative;z-index:1;background:var(--surface);touch-action:pan-y;transition:transform .22s var(--ease-out),background-color .15s}
-.swipe > .tx.dragging{transition:none}
+.swipe.txw + .swipe.txw{border-top:1px solid var(--line)}
+.swipe > .tx,.swipe > .catrow{position:relative;z-index:1;background:var(--surface);touch-action:pan-y;transition:transform .22s var(--ease-out),background-color .15s}
+.swipe > .tx.dragging,.swipe > .catrow.dragging{transition:none}
 .swipe > .tx + .tx{border-top:0}
 .swipe .sdel{position:absolute;inset:2px 0;border-radius:12px;background:var(--expense);color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:flex-end;padding-right:22px;opacity:.55;transition:opacity .15s}
 .swipe.armed .sdel{opacity:1}
@@ -692,12 +692,12 @@ function bindTxRows(){
 /* vuốt một khoản sang trái quá ngưỡng → xoá luôn (có nút Hoàn tác trong thông báo); vuốt ngắn thì trả về */
 const SWIPE_DEL=110;
 function closeSwipes(){}
-function enableSwipe(row){
+function enableSwipe(row, onDelete=swipeDelete, label="Xoá"){
   if (S.canWrite===false) return;
   let wrap=row.parentElement;
   if (!wrap.classList.contains("swipe")){
-    wrap=document.createElement("div"); wrap.className="swipe"; row.before(wrap);
-    const bg=document.createElement("div"); bg.className="sdel"; bg.setAttribute("aria-hidden","true"); bg.textContent="Xoá";
+    wrap=document.createElement("div"); wrap.className="swipe "+(row.classList.contains("tx")?"txw":"cw"); row.before(wrap);
+    const bg=document.createElement("div"); bg.className="sdel"; bg.setAttribute("aria-hidden","true"); bg.textContent=label;
     wrap.append(bg, row);
   }
   let x0=0, y0=0, dx=0, mode=null;
@@ -706,9 +706,21 @@ function enableSwipe(row){
     if (mode==="maybe"){ if(Math.abs(my)>10 && Math.abs(my)>Math.abs(mx)){ mode=null; return; } if(Math.abs(mx)<10) return; mode="drag"; row.classList.add("dragging"); try{ row.setPointerCapture(e.pointerId); }catch(_){} }
     dx=Math.min(0,mx); row.style.transform=`translateX(${dx}px)`; wrap.classList.toggle("armed", dx< -SWIPE_DEL); };
   const end=()=>{ if(mode==="drag"){ row.classList.remove("dragging"); row.dataset.swiped="1"; setTimeout(()=>delete row.dataset.swiped,350);
-      if (dx < -SWIPE_DEL) swipeDelete(row, wrap); else { row.style.transform=""; wrap.classList.remove("armed"); } }
+      if (dx < -SWIPE_DEL) onDelete(row, wrap); else { row.style.transform=""; wrap.classList.remove("armed"); } }
     mode=null; };
   row.onpointerup=end; row.onpointercancel=end;
+}
+/* vuốt một dòng hạng mục ở Báo cáo → xoá mọi khoản của hạng mục đó trong tháng đang xem */
+async function swipeDeleteCat(row, wrap){
+  const cid=row.dataset.catd, kind=S.repKind||"expense";
+  const list=S.txs.filter(t=>t.categoryId===cid && t.kind===kind && ymOf(t.date)===S.month && isRealFlow(t));
+  if (!list.length){ row.style.transform=""; wrap.classList.remove("armed"); return; }
+  const keep=list.map(t=>({...t})), sum=list.reduce((s,t)=>s+(+t.amount||0),0);
+  row.style.transform="translateX(-110%)"; wrap.style.height=wrap.offsetHeight+"px"; void wrap.offsetHeight; wrap.classList.add("gone");
+  try{
+    await S.db.deleteIds("tx", list.map(t=>t.id));
+    undoToast(`Đã xoá ${list.length} khoản ${catById(cid)?.name||""} · ${fmt(sum)}`, ()=>S.db.bulkInsert("tx", keep));
+  }catch(e){ handleWriteErr(e); render(); }
 }
 async function swipeDelete(row, wrap){
   const id=row.dataset.id; const t=S.txs.find(x=>x.id===id); if(!t) return;
@@ -844,7 +856,9 @@ function reportView(){
   bindCatDetail();
 }
 /* bấm một hạng mục (biểu đồ tròn hoặc danh sách) → các khoản của hạng mục đó trong tháng */
-function bindCatDetail(){ document.querySelectorAll("[data-catd]").forEach(b=>b.onclick=()=>{ S.repCat=b.dataset.catd; if(S.tab!=="report"){ if(S.tab==="home") S.month=ymOf(todayStr()); setTab("report"); } else { render(); window.scrollTo(0,0); } }); }
+function bindCatDetail(){
+  document.querySelectorAll(".catrow[data-catd]").forEach(b=>enableSwipe(b, swipeDeleteCat, "Xoá cả hạng mục"));
+  document.querySelectorAll("[data-catd]").forEach(b=>b.onclick=()=>{ if (b.dataset.swiped){ delete b.dataset.swiped; return; } S.repCat=b.dataset.catd; if(S.tab!=="report"){ if(S.tab==="home") S.month=ymOf(todayStr()); setTab("report"); } else { render(); window.scrollTo(0,0); } }); }
 function catDetailView(){
   const c=catById(S.repCat); const kind=c?.kind||"expense";
   const list=sortTx(S.txs.filter(t=>t.categoryId===S.repCat && ymOf(t.date)===S.month && t.kind!=="transfer"));
