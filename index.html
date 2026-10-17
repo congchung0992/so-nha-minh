@@ -369,11 +369,13 @@ function setupView(){
   return `<div class="card">
     <div class="empty" style="padding-bottom:4px"><span class="art"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg></span><b>Mở sổ cho cả nhà</b><span class="small">Tạo sẵn ví Tiền mặt, Ngân hàng và ${DEFAULT_CATS.expense.length+DEFAULT_CATS.income.length} hạng mục thu chi quen thuộc, có icon riêng. Sửa, thêm, bớt lúc nào cũng được.</span></div>
     <div class="catgrid">${preview.map(([n,k])=>`<div class="catbtn">${icoHTML(k)}<span class="n">${esc(n)}</span></div>`).join("")}</div>
-    ${ro ? `<div class="note">Bạn chưa có quyền ghi vào sổ này.</div>` : `<button class="btn" id="doSetup">Tạo sổ</button>`}
-    <p class="muted small" style="margin:0">Có dữ liệu cũ từ app khác? Tạo sổ xong, vào Cài đặt → Nhập từ Excel.</p>
+    ${ro ? `<div class="note">Bạn chưa có quyền ghi vào sổ này.</div>` : `<button class="btn" id="doSetup">Tạo sổ mới</button>
+    <button class="btn ghost" id="doImport">Lấy dữ liệu từ file Sổ Thu Chi (.xlsx)</button>
+    <p class="muted small" style="margin:0">Đang dùng app Sổ Thu Chi? Xuất Bảng kê thu chi ra Excel rồi chọn nút thứ hai: sổ sẽ có đúng các ví, hạng mục và giao dịch cũ.</p>`}
   </div>`;
 }
-function bindSetup(){ const b=$("#doSetup"); if(b) b.onclick=async()=>{ b.disabled=true; b.textContent="Đang tạo…"; try{ await seedDefaults(); toast("Đã tạo sổ"); }catch(e){ handleWriteErr(e); b.disabled=false; b.textContent="Tạo sổ"; } }; }
+function bindSetup(){ const im=$("#doImport"); if(im) im.onclick=()=>{ S.moreSub="import"; S.backTo=null; setTab("more"); };
+  const b=$("#doSetup"); if(b) b.onclick=async()=>{ b.disabled=true; b.textContent="Đang tạo…"; try{ await seedDefaults(); toast("Đã tạo sổ"); }catch(e){ handleWriteErr(e); b.disabled=false; b.textContent="Tạo sổ"; } }; }
 async function seedDefaults(){
   if (!S.wallets.length){
     await S.db.collection("wallets").add({name:"Tiền mặt",type:"cash",icon:"cash",initial:0,order:1,createdAt:Date.now()});
@@ -586,8 +588,8 @@ function moreView(){
     ${mi('data-go="wallets"',"bank","Ví và tài khoản",`${S.wallets.length} ví · số dư ban đầu, đổi tên`)}
     ${mi('data-go="cats"',"market","Hạng mục và icon",`${S.cats.length} hạng mục · đổi icon, thêm mới`)}</section>
   <section class="card" style="gap:0"><h2 style="margin-bottom:6px">Dữ liệu</h2>
-    ${mi('data-go="import"',"bank","Nhập sao kê ngân hàng","Techcombank, file Excel từ app cũ")}
-    ${mi('id="doExport"',"coins","Xuất ra Excel",`Toàn bộ ${S.txs.length} ghi chép + số dư ví`)}</section>
+    ${mi('data-go="import"',"bank","Nhập từ Excel","File Sổ Thu Chi, sao kê Techcombank")}
+    ${mi('id="doExport"',"coins","Xuất ra Excel",`Bảng kê thu chi · ${S.txs.length} ghi chép, mỗi ví một trang`)}</section>
   ${householdCard()}`;
   document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ S.moreSub=b.dataset.go; S.backTo=null; render(); window.scrollTo(0,0); });
   $("#doExport").onclick=exportExcel;
@@ -690,19 +692,49 @@ function catsView(){
 async function exportExcel(){
   if (typeof XLSX==="undefined"){ toast("Chưa tải được thư viện Excel, thử lại sau."); return; }
   const dl = downloads;
-  const kindVi={income:"Thu",expense:"Chi",transfer:"Chuyển ví"};
-  const rows = sortTx(S.txs).reverse().map(t=>({ "Ngày":viDate(t.date), "Loại":kindVi[t.kind]||t.kind, "Số tiền":Number(t.amount)||0, "Hạng mục":catById(t.categoryId)?.name||"", "Ví":walletById(t.walletId)?.name||"", "Sang ví":walletById(t.toWalletId)?.name||"", "Ghi chú":t.note||"", "Người nhập":byName(t.by) }));
-  const bal=balances();
-  const wrows = S.wallets.map(w=>({ "Ví":w.name, "Số dư ban đầu":Number(w.initial)||0, "Số dư hiện tại":bal[w.id]||0 }));
-  const wb=XLSX.utils.book_new();
-  const ws1=XLSX.utils.json_to_sheet(rows.length?rows:[{"Ngày":"","Loại":"","Số tiền":"","Hạng mục":"","Ví":"","Sang ví":"","Ghi chú":"","Người nhập":""}]);
-  ws1["!cols"]=[{wch:12},{wch:10},{wch:14},{wch:22},{wch:20},{wch:16},{wch:30},{wch:14}];
-  const range=XLSX.utils.decode_range(ws1["!ref"]); for(let r=1;r<=range.e.r;r++){ const c=ws1[XLSX.utils.encode_cell({r,c:2})]; if(c) c.z="#,##0"; }
-  XLSX.utils.book_append_sheet(wb,ws1,"Ghi chép");
-  const ws2=XLSX.utils.json_to_sheet(wrows); ws2["!cols"]=[{wch:24},{wch:16},{wch:16}];
-  XLSX.utils.book_append_sheet(wb,ws2,"Số dư ví");
+  /* cùng mẫu "Bảng kê thu chi" của app Sổ Thu Chi để mở/nhập lại được: mỗi ví một trang, dòng mới nhất ở trên */
+  const dmy=iso=>{ const [y,m,d]=String(iso).split("-"); return d+"/"+m+"/"+y; };
+  const hm=t=>{ const d=new Date(t.createdAt||0); return t.createdAt ? pad(d.getHours())+":"+pad(d.getMinutes()) : "00:00"; };
+  const dates=S.txs.map(t=>t.date).filter(Boolean).sort(); const now=new Date();
+  const fromD=dates[0]||todayStr(), toD=dates[dates.length-1]||todayStr();
+  const stamp=`${S.email||""}, ${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const wb=XLSX.utils.book_new(); const usedNames=new Set();
+  for (const w of sortedWallets()){
+    const lines=[];
+    for (const t of S.txs){
+      const a=Number(t.amount)||0, cat=catById(t.categoryId);
+      const catCols = cat ? (cat.parent ? [cat.parent,cat.name] : [cat.name,""]) : ["",""];
+      if (t.kind==="transfer"){
+        if (t.walletId===w.id) lines.push({t,inA:0,outA:a,cat:["",""],note:((t.note||"")+" (Chuyển tới "+(walletById(t.toWalletId)?.name||"ví khác")+")").trim()});
+        else if (t.toWalletId===w.id) lines.push({t,inA:a,outA:0,cat:["",""],note:((t.note||"")+" (Chuyển từ "+(walletById(t.walletId)?.name||"ví khác")+")").trim()});
+      } else if (t.walletId===w.id) lines.push({t,inA:t.kind==="income"?a:0,outA:t.kind==="expense"?a:0,cat:catCols,note:t.note||""});
+    }
+    const open=Number(w.initial)||0; let bal=open, sumIn=0, sumOut=0;
+    lines.sort((x,y)=> x.t.date===y.t.date ? (x.t.createdAt||0)-(y.t.createdAt||0) : (x.t.date<y.t.date?-1:1));
+    for (const l of lines){ bal+=l.inA-l.outA; l.bal=bal; sumIn+=l.inA; sumOut+=l.outA; }
+    lines.reverse();
+    const aoa=[[""],["","","SỔ NHÀ MÌNH"],["","","Sổ thu chi của cả nhà"],["Bảng Kê Thu Chi"],[`Từ ngày ${dmy(fromD)} đến ngày ${dmy(toD)}`],[],
+      ["","","","","","","","Tổng thu",sumIn,"Số dư đầu kì",open],
+      ["","","","","","","","Tổng chi",sumOut,"Số dư cuối kì",bal],[],
+      ["","","","","","","","","","","Đơn vị tiền tệ: VND"],
+      ["STT","Ngày","Giờ","Số tiền thu","Số tiền chi","Số dư","Hạng mục cha","Hạng mục con","Chi cho ai","Chuyến đi/Sự kiện","Diễn giải"],
+      ...lines.map((l,i)=>[i+1,dmy(l.t.date),hm(l.t),l.inA,l.outA,l.bal,l.cat[0],l.cat[1],"","",l.note]),
+      [],["","","","","","",stamp]];
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    const last=aoa.length-1;
+    ws["!merges"]=[{s:{r:3,c:0},e:{r:3,c:10}},{s:{r:4,c:0},e:{r:4,c:10}},{s:{r:1,c:2},e:{r:1,c:4}},{s:{r:2,c:2},e:{r:2,c:4}},{s:{r:last,c:6},e:{r:last,c:10}}];
+    ws["!cols"]=[6,13,8,17.5,17.5,17.5,21,19,16.5,18.5,28].map(wch=>({wch}));
+    const money=(r,c)=>{ const cell=ws[XLSX.utils.encode_cell({r,c})]; if(cell && typeof cell.v==="number") cell.z="#,##0"; };
+    [[6,8],[6,10],[7,8],[7,10]].forEach(([r,c])=>money(r,c));
+    for (let r=11; r<11+lines.length; r++) for (const c of [3,4,5]) money(r,c);
+    let sn=(w.name||"Ví").replace(/[\[\]:*?\/\\]/g," ").slice(0,31).trim()||"Ví", k=1;
+    while (usedNames.has(sn.toLowerCase())) sn=sn.slice(0,28)+" "+(++k);
+    usedNames.add(sn.toLowerCase());
+    XLSX.utils.book_append_sheet(wb,ws,sn);
+  }
+  if (!wb.SheetNames.length){ toast("Sổ chưa có ví nào để xuất."); return; }
   const out=XLSX.write(wb,{bookType:"xlsx",type:"array"});
-  const d=new Date(); const name=`So-Nha-Minh_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.xlsx`;
+  const name=`Bang_ke_thu_chi_tu_ngay_${dmy(fromD).replace(/\//g,"_")}_den_ngay_${dmy(toD).replace(/\//g,"_")}.xlsx`;
   try{ await dl.save({filename:name,data:new Blob([out])}); toast("Đã xuất file Excel"); }
   catch(e){ if(e?.code==="declined") return; if(e?.code==="rate_limited") toast("Đang có một yêu cầu tải, đợi chút rồi thử lại."); else toast("Chưa xuất được file."); }
 }
@@ -775,11 +807,118 @@ function guessCatKey(desc, kind){ const s=" "+strip(desc)+" "; for(const [re,k] 
 function findCatByKey(key, kind){ return S.cats.filter(c=>c.kind===kind).sort((a,b)=>(a.order||0)-(b.order||0)).find(c=>catIconKey(c)===key); }
 function hashStr(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } let h2=5381; for(let i=0;i<s.length;i++) h2=((h2*33)^s.charCodeAt(i))>>>0; return h.toString(36)+h2.toString(36); }
 
+/* ---------- "Bảng kê thu chi" của app Sổ Thu Chi: mỗi trang tính là một ví ----------
+   Dòng tiêu đề: STT | Ngày | Giờ | Số tiền thu | Số tiền chi | Số dư | Hạng mục cha | Hạng mục con | Chi cho ai | Chuyến đi/Sự kiện | Diễn giải
+   Chuyển ví nằm ở cả hai trang: "… (Chuyển tới X)" bên ví gửi, "… (Chuyển từ Y)" bên ví nhận. */
+const TRANSFER_RE=/\s*\((Chuyển tới|Chuyển từ)\s+(.+?)\)\s*$/i;
+function stcParse(aoa){
+  const hi=aoa.findIndex(r=>strip(r[0])==="stt" && r.some(c=>strip(c)==="hang muc cha"));
+  if (hi<0) return null;
+  const h=aoa[hi].map(c=>strip(c)); const col=n=>h.indexOf(n);
+  const c={date:col("ngay"),time:col("gio"),inA:col("so tien thu"),outA:col("so tien chi"),parent:col("hang muc cha"),child:col("hang muc con"),who:col("chi cho ai"),event:col("chuyen di/su kien"),note:col("dien giai")};
+  let open=0, close=null;
+  for (const r of aoa.slice(0,hi)) for (let k=0;k<r.length-1;k++){ const s=strip(r[k]);
+    if (/^so du dau k[iy]$/.test(s)) open=toNum(r[k+1]); if (/^so du cuoi k[iy]$/.test(s)) close=toNum(r[k+1]); }
+  const txt=(r,i)=> i<0 ? "" : String(r[i]??"").replace(/\s+/g," ").trim();
+  const rows=[];
+  for (const r of aoa.slice(hi+1)){
+    const date=toISO(r[c.date]); const a=Math.abs(toNum(r[c.inA])), b=Math.abs(toNum(r[c.outA]));
+    if (!date || (!a && !b)) continue;
+    rows.push({date,time:stcTime(r[c.time]),inA:a,outA:b,parent:txt(r,c.parent),child:txt(r,c.child),who:txt(r,c.who),event:txt(r,c.event),note:txt(r,c.note)});
+  }
+  return {open,close,rows};
+}
+function stcTime(v){
+  if (v instanceof Date && !isNaN(v)) return pad(v.getHours())+":"+pad(v.getMinutes());
+  if (typeof v==="number" && v>=0 && v<1){ const m=Math.round(v*1440); return pad(Math.floor(m/60)%24)+":"+pad(m%60); }
+  const m=String(v||"").match(/(\d{1,2}):(\d{2})/); return m ? pad(+m[1])+":"+m[2] : "00:00";
+}
+function buildStc(){
+  const st=S.importState; const items=[], newCats=[], newWallets=[]; const seen=new Set(), have=new Set(S.txs.map(t=>t.id));
+  let dupes=0, sumIn=0, sumOut=0, transfers=0, from=null, to=null;
+  const inFile=new Set(st.stc.map(s=>strip(s.name)));
+  const wallet=(name,initial)=>{ const w=S.wallets.find(x=>strip(x.name)===strip(name)); if(w) return {id:w.id,name:w.name};
+    let n=newWallets.find(x=>strip(x.name)===strip(name)); if(!n){ n={name,initial:initial||0}; newWallets.push(n); } return {id:null,name:n.name}; };
+  const category=(kind,parent,child)=>{ const name=child||parent||"Khác", par=child?parent:"";
+    const hit=c=>c.kind===kind && strip(c.name)===strip(name) && strip(c.parent||"")===strip(par);
+    let cat=S.cats.find(hit)||newCats.find(hit); if(!cat){ cat={name,parent:par,kind,icon:guessIcon(name),_new:true}; newCats.push(cat); } return cat; };
+  const sheets=st.stc.map(s=>({...s, w:wallet(s.name, s.open), n:0}));
+  for (const sh of sheets){
+    for (const [ri,r] of sh.rows.entries()){
+      let kind, amount, w=sh.w, toW=null, cat=null, note=r.note;
+      const tm=note.match(TRANSFER_RE);
+      if (tm && !r.parent && !r.child){
+        note=note.replace(TRANSFER_RE,"");
+        const other=tm[2].trim(), out=/tới/i.test(tm[1]);
+        if (!out && inFile.has(strip(other))) continue; // đã có ở trang của ví gửi
+        kind="transfer"; amount=out?r.outA:r.inA; transfers++;
+        if (out) toW=wallet(other); else { toW=w; w=wallet(other); }
+      } else {
+        kind=r.inA>0?"income":"expense"; amount=kind==="income"?r.inA:r.outA;
+        cat=category(kind,r.parent,r.child);
+        if (r.who) note+=(note?" · ":"")+"Cho: "+r.who;
+        if (r.event) note+=(note?" · ":"")+"Sự kiện: "+r.event;
+      }
+      if (!amount) continue;
+      const id="stc-"+hashStr([S.hid,w.name,toW?.name||"",r.date,r.time,kind,amount,cat?strip(cat.parent+"|"+cat.name):"",strip(note)].join("|"));
+      let uid=id, k=1; while(seen.has(uid)) uid=id+"-"+(++k); seen.add(uid);
+      if (have.has(uid)){ dupes++; continue; }
+      const [y,mo,d]=r.date.split("-").map(Number), [hh,mm]=r.time.split(":").map(Number);
+      // file xếp mới nhất lên đầu; cộng thêm vài ms để các khoản cùng phút giữ đúng thứ tự cũ
+      items.push({id:uid,kind,amount,w,toW,cat,date:r.date,note:note.slice(0,200),createdAt:new Date(y,mo-1,d,hh,mm).getTime()+(sh.rows.length-ri)});
+      sh.n++;
+      if (kind==="income") sumIn+=amount; else if (kind==="expense") sumOut+=amount;
+      if(!from||r.date<from) from=r.date; if(!to||r.date>to) to=r.date;
+    }
+  }
+  return {items,newCats,newWallets,dupes,sumIn,sumOut,transfers,from,to,sheets};
+}
+function stcView(){
+  const st=S.importState, p=buildStc();
+  $("#view").innerHTML = backBtn() + `<section class="card"><div class="row between"><h2>File Sổ Thu Chi</h2><span class="small muted" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(st.fileName)}</span></div>
+      <div class="list-plain">${p.sheets.map(s=>`<div class="menuitem" style="padding:8px 0">${icoHTML(guessWallet(s.name))}<div class="mid"><div style="font-weight:600">Ví “${esc(s.name)}”${s.w.id?"":` <span class="small muted">(tạo mới)</span>`}</div><div class="s">${s.n} giao dịch mới${s.close!=null?` · số dư cuối kỳ trong file ${fmt(s.close)}`:""}</div></div></div>`).join("")}</div>
+    </section>
+    <section class="card"><h2>Xem trước</h2>
+      <div class="balance" style="padding:0;box-shadow:none"><div class="pair">
+        <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Tổng thu</span><b class="num in-c">${fmt(p.sumIn)}</b></span></div>
+        <div><span class="arrow" style="background:var(--expense)">${ARROW_OUT}</span><span style="min-width:0"><span>Tổng chi</span><b class="num out-c">${fmt(p.sumOut)}</b></span></div>
+      </div></div>
+      <div class="small">Sẽ nhập <b>${p.items.length}</b> giao dịch${p.transfers?` (có ${p.transfers} lần chuyển giữa ví)`:""}${p.dupes?`, bỏ qua <b>${p.dupes}</b> giao dịch đã có trong sổ`:""}${p.from?` · từ ${viDate(p.from)} đến ${viDate(p.to)}`:""}.</div>
+      ${p.newCats.length?`<p class="small muted" style="margin:0">Tạo ${p.newCats.length} hạng mục: ${p.newCats.map(c=>esc(c.parent?c.parent+" › "+c.name:c.name)).join(", ")}</p>`:""}
+      <div class="err" id="iErr" role="alert"></div>
+      <div class="btnrow"><button class="btn ghost" id="iCancel">Chọn file khác</button><button class="btn" id="iGo" ${p.items.length?"":"disabled"}>Nhập ${p.items.length} giao dịch</button></div>
+    </section>`;
+  bindBack();
+  $("#iCancel").onclick=()=>{S.importState=null; importView();};
+  $("#iGo").onclick=runStcImport;
+}
+async function runStcImport(){
+  const btn=$("#iGo"), err=$("#iErr"); const p=buildStc(); if(!p.items.length) return;
+  btn.disabled=true; $("#iCancel").disabled=true;
+  const batch="imp-"+Date.now(); const ids=[];
+  try{
+    const catIds={}, walIds={};
+    let order=Math.max(0,...S.cats.map(c=>c.order||0));
+    for (const c of p.newCats){ const ref=await S.db.collection("categories").add({name:c.name,parent:c.parent,kind:c.kind,icon:c.icon,order:++order}); catIds[c.kind+"|"+strip(c.parent)+"|"+strip(c.name)]=ref.id; }
+    let wo=Math.max(0,...S.wallets.map(w=>w.order||0));
+    for (const n of p.newWallets){ const t=guessWallet(n.name); const ref=await S.db.collection("wallets").add({name:n.name,type:t,icon:t,initial:n.initial||0,order:++wo,createdAt:Date.now()}); walIds[strip(n.name)]=ref.id; }
+    const wid=w=> w ? (w.id||walIds[strip(w.name)]) : "";
+    const docs=p.items.map(it=>({id:it.id,kind:it.kind,amount:it.amount,walletId:wid(it.w),toWalletId:wid(it.toW),
+      categoryId:!it.cat?"":(it.cat._new?catIds[it.kind+"|"+strip(it.cat.parent)+"|"+strip(it.cat.name)]:it.cat.id),
+      date:it.date,note:it.note,ref:"",by:S.uid||"",src:batch,createdAt:it.createdAt}));
+    docs.forEach(d=>ids.push(d.id));
+    await S.db.bulkInsert("tx",docs,n=>{ btn.textContent=`Đang nhập ${n}/${docs.length}…`; });
+    S.lastBatch={id:batch,ids}; S.importState=null; toast(`Đã nhập ${ids.length} giao dịch`); importView();
+  }catch(e){ if(ids.length) S.lastBatch={id:batch,ids}; err.textContent="Nhập dừng giữa chừng. Bấm Thử lại: giao dịch đã nhập sẽ được bỏ qua."; btn.textContent="Thử lại"; btn.disabled=false; $("#iCancel").disabled=false; if(e?.code==="invalid_argument") handleWriteErr(e); }
+}
+
 function importView(){
   const st=S.importState; let body="";
+  if (st && st.stc) return stcView();
   if (!st){
-    body = `<section class="card"><div class="row">${icoHTML("bank","lg")}<div><h2>Nhập sao kê ngân hàng</h2><p class="small muted" style="margin:4px 0 0">Techcombank và file Excel từ app cũ</p></div></div>
+    body = `<section class="card"><div class="row">${icoHTML("bank","lg")}<div><h2>Nhập từ Excel</h2><p class="small muted" style="margin:4px 0 0">File của app Sổ Thu Chi, sao kê Techcombank</p></div></div>
       <div class="list-plain small">
+        <div class="menuitem" style="padding:8px 0">${icoHTML("coins","sm")}<div class="mid"><b>Chuyển từ app Sổ Thu Chi:</b> trong app đó xuất <b>Bảng kê thu chi</b> ra Excel rồi chọn file ở dưới. Mỗi trang tính thành một ví, giữ nguyên hạng mục cha/con, giờ ghi và các lần chuyển giữa ví.</div></div>
         <div class="menuitem" style="padding:8px 0">${icoHTML("ewallet","sm")}<div class="mid">Trong ứng dụng hoặc Internet Banking của Techcombank, xuất sao kê tài khoản dạng <b>Excel (.xlsx)</b> cho khoảng ngày bạn cần.</div></div>
         <div class="menuitem" style="padding:8px 0">${icoHTML("receipt","sm")}<div class="mid">Chọn file ở dưới. Sổ tự nhận cột Ngày giao dịch, Nợ, Có, Diễn giải và tự đoán hạng mục theo nội dung (Grab là Taxi, EVN là Tiền điện, Winmart là Đi chợ…).</div></div>
         <div class="menuitem" style="padding:8px 0">${icoHTML("shield","sm")}<div class="mid">Nhập lại sao kê có ngày trùng cũng không bị đúp: giao dịch đã có sẽ được bỏ qua.</div></div>
@@ -842,6 +981,8 @@ function readFile(file){
   r.onload=()=>{ try{
       const wb=XLSX.read(new Uint8Array(r.result),{type:"array",cellDates:true});
       const st={wb,fileName:file.name,sheetNames:wb.SheetNames};
+      const stc=wb.SheetNames.map(name=>({name,...(stcParse(XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:""}))||{})})).filter(s=>s.rows);
+      if (stc.length){ st.stc=stc; S.importState=st; importView(); return; }
       loadSheet(st, wb.SheetNames[0]);
       const head = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""}).slice(0,st.headRow+1).flat().join(" ");
       st.isTcb = /techcom|tcb/i.test(strip(head)+" "+strip(file.name));
@@ -948,7 +1089,7 @@ const lsSet = (k,v) => { try{ v==null?localStorage.removeItem(k):localStorage.se
 /* ánh xạ cột DB ↔ trường trong app */
 const MAP = {
   wallets:   {name:"name",type:"type",icon:"icon",initial:"initial",order:"sort"},
-  categories:{name:"name",kind:"kind",icon:"icon",order:"sort"},
+  categories:{name:"name",kind:"kind",icon:"icon",order:"sort",parent:"parent"},
   tx:        {kind:"kind",amount:"amount",walletId:"wallet_id",toWalletId:"to_wallet_id",categoryId:"category_id",date:"date",note:"note",ref:"ref",src:"src",by:"created_by",updatedBy:"updated_by"}
 };
 const NULLABLE = new Set(["to_wallet_id","category_id","created_by","updated_by","icon","src"]);
