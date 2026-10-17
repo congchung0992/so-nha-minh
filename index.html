@@ -407,7 +407,8 @@ function debts(){
 }
 /* thu chi thật: bỏ chuyển giữa ví, đi vay / cho vay / trả nợ / thu nợ và điều chỉnh số dư (chỉ là tiền đổi chỗ, không phải kiếm được hay tiêu mất) */
 const isAdjust = t => /dieu chinh so du/.test(strip(t.note));
-const isRealFlow = t => (t.kind==="income"||t.kind==="expense") && !debtKind(catById(t.categoryId)) && !isAdjust(t);
+const isInternalCat = c => !!c && /chuyen giua tai khoan/.test(strip(c.name));
+const isRealFlow = t => { if (t.kind!=="income" && t.kind!=="expense") return false; const c=catById(t.categoryId); return !debtKind(c) && !isInternalCat(c) && !isAdjust(t); };
 function monthTotals(ym){ let inc=0, exp=0; for (const t of S.txs){ if (ymOf(t.date)!==ym || !isRealFlow(t)) continue; if(t.kind==="income") inc+=+t.amount; else exp+=+t.amount; } return {inc, exp}; }
 function byCategory(ym, kind){ const m={}; S.txs.forEach(t=>{ if(t.kind===kind && ymOf(t.date)===ym && isRealFlow(t)) m[t.categoryId]=(m[t.categoryId]||0)+(+t.amount); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); }
 const sortTx = arr => arr.slice().sort((a,b)=> a.date===b.date ? (b.createdAt||0)-(a.createdAt||0) : (a.date<b.date?1:-1));
@@ -1106,8 +1107,204 @@ async function runStcImport(){
   }catch(e){ if(ids.length) S.lastBatch={id:batch,ids}; err.textContent="Nhập dừng giữa chừng. Bấm Thử lại: giao dịch đã nhập sẽ được bỏ qua."; btn.textContent="Thử lại"; btn.disabled=false; $("#iCancel").disabled=false; if(e?.code==="invalid_argument") handleWriteErr(e); }
 }
 
+/* ---------- Sao kê Techcombank (Sổ phụ kiêm phiếu báo nợ/có) ----------
+   Cột: Ngày giao dịch | Đối tác | NH Đối tác | Diễn giải | Số bút toán | Nợ TKTT | Có TKTT | Số dư.
+   Tiêu đề lặp lại mỗi trang; sau dòng "Số dư cuối kỳ" là phụ lục Sinh lời tự động (bỏ qua). */
+function tcbParse(aoa){
+  const hi=aoa.findIndex(r=>{ const s=r.map(c=>strip(c)); return s.some(c=>/^no tktt/.test(c)) && s.some(c=>/^co tktt/.test(c)) && s.some(c=>/^dien giai/.test(c)); });
+  if (hi<0) return null;
+  const h=aoa[hi].map(c=>strip(c).replace(/\s+/g," ")); const col=re=>h.findIndex(c=>re.test(c));
+  const c={d:col(/^ngay giao dich/),p:col(/^doi tac/),n:col(/^dien giai/),r:col(/^so but toan/),o:col(/^no tktt/),i:col(/^co tktt/),b:col(/^so du/)};
+  if (c.d<0||c.o<0||c.i<0||c.n<0) return null;
+  const after=(re)=>{ for(const r of aoa.slice(0,hi)){ const k=r.findIndex(x=>re.test(strip(x))); if(k>=0) return String(r.slice(k+1).find(x=>String(x).trim())||"").trim(); } return ""; };
+  const owner=after(/ten khach hang|customer name/), acct=after(/so tai khoan|account no/);
+  const txt=v=>String(v??"").replace(/\s+/g," ").trim();
+  let open=null, close=null; const rows=[];
+  for (const r of aoa.slice(hi+1)){
+    const line=strip(r.join(" "));
+    if (/so du dau ky|opening balance/.test(line)){ const v=r.filter(x=>String(x).trim()).pop(); open=toNum(v); continue; }
+    if (/so du cuoi ky|ending balance/.test(line)){ const v=r.filter(x=>String(x).trim()).pop(); close=toNum(v); break; }
+    const date=toISO(r[c.d]); if(!date) continue;
+    const out=Math.abs(toNum(r[c.o])), inn=Math.abs(toNum(r[c.i])); if(!out && !inn) continue;
+    rows.push({date, partner:txt(r[c.p]), content:txt(r[c.n]), ref:txt(c.r>=0?r[c.r]:""), out, inn});
+  }
+  return rows.length ? {owner, acct, open, close, rows} : null;
+}
+const tcase = s => String(s||"").toLowerCase().replace(/(^|[\s(])\S/g, m=>m.toUpperCase());
+const GENERIC_NOTE = /^(chuyen|chuyen tien|chuyen khoan|ck|chuyen khoan nhanh qua zalo|thanh toan)?$/;
+/* ghi chú = "đối tác · nội dung": bỏ tên chủ tài khoản, mã giao dịch, số thẻ */
+function tcbNote(r, owner){
+  let p=r.partner, t=r.content; const ps=strip(p);
+  const esc2=s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  if (/^vnd-the /.test(ps) || /^gd the /i.test(t)){
+    const m=t.match(/\bTAI\s+(.+?)(?:\s+APPCODE|\s+SO THE|$)/i); let mer=(m?m[1]:t).split(/\s+/).filter(w=>!/\d/.test(w)).join(" ").replace(/\s+[A-Z]{2}$/,"").trim();
+    return {party:"Thẻ Visa", what:mer};
+  }
+  if (/^vnd-bnk-tra soat/.test(ps)){ const m=t.match(/\bTAI\s+(.+?)(?:\s+SO THE|$)/i); return {party:"Hoàn tiền thẻ", what:m?m[1].trim():""}; }
+  if (/^m service/.test(ps)) return {party:"MoMo", what:/cashin/i.test(t)?"Nạp ví MoMo":t};
+  if (/^online mobile services/.test(ps)) return {party:"MoMo", what:/cashout/i.test(t)?"Rút từ ví MoMo":t};
+  if (/^vnd-vdn-crm/.test(ps) || /nop tien tai crm/i.test(t)) return {party:"", what:"Nộp tiền mặt vào tài khoản"};
+  // thanh toán QR qua trung gian: "MDxxx,TÊN CỬA HÀNG,nội dung"
+  if (/^vnd-bnk-trung gian/.test(ps) || /^m[sd]\w{8,},/i.test(t)){ const parts=t.split(","); if(parts.length>=2 && /^m[sd]\w{8,}$/i.test(parts[0].trim())){ p=parts[1].trim(); t=parts.slice(2).join(",").trim(); } }
+  t=t.replace(/^\(B\/O [^)]*\)\s*/i,"").replace(/^Techcombank;\d+;/i,"").replace(/^QR - /i,"");
+  const names=[owner, owner.split(/\s+/).slice(-2).join(" ")].filter(x=>x && x.length>3);
+  for (const n of names) t=t.replace(new RegExp("^"+esc2(n)+"\\s*(chuyen khoan nhanh qua zalo|chuyen khoan|chuyen tien|chuyen|ck)?\\s*","i"),"");
+  if (!p){ const m=t.match(/([A-Z][A-Z]+(?: [A-Z]+){1,4}) (?:chuyen|Chuyen)/) || t.match(/^([A-Z]{2,}(?: [A-Z]{2,}){2,4})\b/); if(m){ p=m[1]; } }
+  if (p) t=t.replace(new RegExp("^"+esc2(p)+"\\s*(chuyen khoan nhanh qua zalo|chuyen khoan|chuyen tien|chuyen|ck)?\\s*","i"),"");
+  t=tcbCleanWhat(t, owner);
+  if (p){ t=t.replace(new RegExp("^"+esc2(p)+"\\s*(chuyen khoan|chuyen tien|chuyen|ck)?\\s*","i"),"").trim(); if (GENERIC_NOTE.test(strip(t))) t=""; }
+  const self = !!owner && (strip(p)===strip(owner) || /lan huon+g$/.test(strip(p).replace(/^\d+\s*/,"")) || (!p && !t && new RegExp("^"+esc2(owner),"i").test(r.content)));
+  if (self) p="";   // chuyển giữa các tài khoản của chính mình
+  p=tcbShortName(p);
+  if (p && t && strip(t).split(/\s+/).every(w=>strip(p).split(/\s+/).includes(w))) t="";  // nội dung chỉ lặp lại tên người gửi
+  return {party:tcase(p), what:t, self};
+}
+/* rút gọn tên công ty / hộ kinh doanh */
+function tcbShortName(p){
+  let s=String(p||"").replace(/\s+/g," ").trim(); if(!s) return "";
+  const half=s.split(" "); const n=half.length/2; if (Number.isInteger(n) && half.slice(0,n).join(" ")===half.slice(n).join(" ")) s=half.slice(0,n).join(" ");
+  if (/^VND-BNK-TRUNG GIAN/i.test(s)) return "Techcombank";
+  const short=s.replace(/\b(GENERAL COMMERCIAL SERVICES )?JOINT STOCK( COMPANY)?\b|\bJSC\b|\bGROUP\b|^(CONG TY (CO PHAN|TNHH|CP)|CTY (CP|TNHH)|CTCP|CT CP|HO KINH DOANH|HKD)\s+/gi,"").replace(/\s+/g," ").trim();
+  return short.length>=3 ? short : s;
+}
+/* bỏ mã giao dịch, số thẻ, số điện thoại… chỉ giữ phần người đọc hiểu được */
+function tcbCleanWhat(t, owner){
+  let s=String(t||"");
+  if (/ETAX\+/i.test(s)) return "Nộp thuế";
+  let m;
+  if ((m=s.match(/Thanh toan tien dien thang \d+/i))) return m[0];
+  if ((m=s.match(/chi BT (\w+)/i))) return "Bồi thường bảo hiểm "+m[1];
+  if ((m=s.match(/loi nhuan Sinh loi tu dong thang \d+/i))) return "Lợi nhuận sinh lời tự động "+m[0].match(/thang \d+/i)[0];
+  if (/tra lai so du tren tai khoan/i.test(s)) return "Lãi không kỳ hạn "+(s.match(/thang [\d/]+/i)||[""])[0];
+  if (/trich no sao ke the tin dung/i.test(s)) return "Trích nợ sao kê thẻ tín dụng";
+  if (/thanh toan no the tin dung/i.test(s)) return "Thanh toán nợ thẻ tín dụng";
+  if ((m=s.match(/T\.?Toan QR - tai (.+?) - \d/i))) return m[1];
+  if ((m=s.match(/THANH TOAN TAI (.+)/i))) return "";
+  s=s.replace(/\.CT tu .*$/i,"").replace(/^MBVCB\.[\w.]+\s*/i,"").replace(/\s+ID\s+\S+/i,"");
+  s=s.replace(/chuyen khoan nhanh qua zalo/ig,"").replace(/\b0\d{9}\b/g,"");
+  if (owner) s=s.replace(new RegExp("\\b"+owner.split(/\s+/).slice(-2).join("\\s+")+"\\b|\\blan huonng\\b","ig"),"");
+  // bỏ các "từ" là mã: có cả chữ và số, hoặc chuỗi số dài
+  s=s.split(/[\s,]+/).filter(w=>!(/\d/.test(w) && (w.length>=5 || /[a-z]/i.test(w))) && !/^\d{3,}$/.test(w)).join(" ");
+  s=s.replace(/\s+/g," ").trim();
+  return GENERIC_NOTE.test(strip(s)) ? "" : s;
+}
+/* hạng mục: ưu tiên học từ sổ (cùng đối tác đã được xếp trước đó), sau đó theo từ khoá */
+const TCB_RULES = [
+  [/nop tien mat vao tai khoan|nap vi momo|rut tu vi momo|chuyen vpbank/, null, {internal:true}],
+  [/trich no sao ke the tin dung|thanh toan no the tin dung/, "expense", {name:"Thanh toán thẻ tín dụng", icon:"card"}],
+  [/\bmuon\b|\bvay\b(?!.*tra)/, "income", {debt:"borrow"}],
+  [/tra goc|tra no/, "expense", {debt:"repay"}],
+  [/tra no/, "income", {debt:"collect"}],
+  [/tra lai hdtd|lai bank|lai vay/, "expense", {name:"Lãi vay", icon:"receipt"}],
+  [/loi nhuan sinh loi|tra lai so du|lai tien gui|lai tiet kiem/, "income", {key:"piggy"}],
+  [/insmart|manulife|bao hiem|boi thuong/, "income", {name:"Bảo hiểm chi trả", icon:"shield"}],
+  [/hoan tien|doi diem/, "income", {name:"Hoàn tiền, điểm thưởng", icon:"gift"}],
+  [/chuc mung|mung cuoi|li xi/, "income", {key:"gift"}],
+  [/\bluong\b|salary/, "income", {key:"salary"}],
+  [/chuc mung|vieng|dam cuoi|mung cuoi|phung vieng|hieu hi/, "expense", {key:"envelope"}],
+  [/benh vien|phong kham|\bkham\b|tiem|sang loc|thuoc|pharma|duoc pham|nha thuoc|salonpas|long chau|an khang/, "expense", {key:"health"}],
+  [/mochi|cho con|tam be|unbee|binh sua|rua binh|sua tam|cham soc ss|\bbim\b|con cung|kids/, "expense", {key:"kids"}],
+  [/tien nuoc|nuoc gui xe|ck nuoc|nuoc th\b|nuoc khoa|\bnuoc\b/, "expense", {key:"drop"}],
+  [/tien dien|dien thang long|\bevn\b|dien luc/, "expense", {key:"bolt"}],
+  [/wincommerce|winmart|fujimart|maxvalu|bach hoa|coopmart|aeon|lotte|sieu thi|hoa qua|trai cay|hong tao|hong ngam|mang cut|dua xiem|ro luoi/, "expense", {key:"market"}],
+  [/bo kho|heo quay|banh|\bbmi\b|crep|\boc\b|cha ca|an sang|\bbun\b|\bpho\b|\bche\b|cafe|\bcf|ca phe|tra sua|manwah|am thuc|nha hang|quan an|\bcom\b|\blau\b/, "expense", {key:"food"}],
+  [/taxi|xanh sm|\bgrab\b|be group/, "expense", {key:"car"}],
+  [/gui xe|sua xe|\bxang\b/, "expense", {key:"bike"}],
+  [/shopee|lazada|tiki|tiktok|\bspx\b|\bship\b|mua sam/, "expense", {key:"bag"}],
+  [/\bspa\b|tat mc|lam dep|cat toc|salon|my pham|nail/, "expense", {key:"beauty"}],
+  [/\bqao\b|quan ao|\bvay dam\b|giay dep/, "expense", {key:"shirt"}],
+  [/concert|ve xem|cgv|bigbang|karaoke/, "expense", {key:"ticket"}],
+  [/anthropic|claude|netflix|spotify|youtube|google|icloud|chatgpt|openai/, "expense", {name:"Dịch vụ online, phần mềm", icon:"tv"}],
+  [/\bgui vo\b|chong gui|ck vo\b/, "income", {name:"Chồng gửi", icon:"family"}],
+  [/books|\bsach\b|hoc phi/, "expense", {key:"school"}],
+  [/etax|\bthue\b/, "expense", {name:"Thuế, phí", icon:"receipt"}],
+  [/\bck bo\b|cho bo|gui bo|bo me|cua bo|\bbo thit\b|\bchong\b/, "expense", {key:"family"}],
+  [/thue nha|tien nha/, "expense", {key:"home"}]
+];
+function tcbLearned(){
+  const m={}; sortTx(S.txs).reverse().forEach(t=>{ if(!t.categoryId||t.kind==="transfer") return; const seg=String(t.note||"").split(" · "); const k=strip(seg[0]==="Thẻ Visa"?seg[1]||"":seg[0]); if(k.length>2) m[t.kind+"|"+k]=t.categoryId; });
+  return m;
+}
+function buildTcb(){
+  const st=S.importState, d=st.tcb; const items=[], newCats=[]; const have=new Set(S.txs.map(t=>t.id)), seen=new Set();
+  let dupes=0, sumIn=0, sumOut=0, guessed=0, learned=0, internal=0, from=null, to=null;
+  const learn=tcbLearned();
+  const findOrNew=(kind,name,icon,parent="")=>{ const hit=c=>c.kind===kind && strip(c.name)===strip(name); let c=S.cats.find(hit)||newCats.find(hit); if(!c){ c={name,parent,kind,icon:icon||guessIcon(name),_new:true}; newCats.push(c); } return c; };
+  const DEBT_NAME={borrow:["income","Đi vay"],repay:["expense","Trả nợ"],collect:["income","Thu nợ"],lend:["expense","Cho vay"]};
+  d.rows.forEach((r,i)=>{
+    const kind=r.out>0?"expense":"income", amount=r.out||r.inn;
+    const {party,what,self}=tcbNote(r, d.owner);
+    const note=([party,what].filter(Boolean).join(" · ") || (self?"Chuyển giữa tài khoản của mình":"")).slice(0,200);
+    const text=" "+strip([party,what,r.partner,r.content].join(" "))+" ";
+    let cat=null;
+    if (self && !what){ cat=findOrNew(kind,"Chuyển giữa tài khoản","transfer"); internal++; }
+    const lk=strip(party==="Thẻ Visa"?what:party);
+    if (!cat && lk.length>2 && learn[kind+"|"+lk]){ cat=catById(learn[kind+"|"+lk]); if(cat) learned++; }
+    if (!cat) for (const [re,k,tg] of TCB_RULES){ if (k && k!==kind) continue; if (!re.test(text)) continue;
+      if (tg.internal){ cat=findOrNew(kind,"Chuyển giữa tài khoản","transfer"); internal++; }
+      else if (tg.debt){ const [dk,dn]=DEBT_NAME[tg.debt]; if(dk!==kind) continue; cat=S.cats.find(c=>c.kind===kind&&debtKind(c)===tg.debt)||findOrNew(kind,dn,"handshake"); }
+      else if (tg.name) cat=findOrNew(kind,tg.name,tg.icon);
+      else { cat=findCatByKey(tg.key,kind); if(!cat){ const def=(DEFAULT_CATS[kind]||[]).find(x=>x[1]===tg.key); if(def) cat=findOrNew(kind,def[0],def[1]); } }
+      if (cat){ if(!tg.internal) guessed++; break; } }
+    if (!cat) cat=S.cats.find(c=>c.kind===kind&&strip(c.name)==="khac")||findOrNew(kind,"Khác","other");
+    const id="tcb-"+hashStr([S.hid,r.ref,r.date,kind,amount].join("|"));
+    let uid=id, k=1; while(seen.has(uid)) uid=id+"-"+(++k); seen.add(uid);
+    if (have.has(uid)){ dupes++; return; }
+    const [y,mo,dd]=r.date.split("-").map(Number);
+    items.push({id:uid,kind,amount,cat,note,ref:r.ref.slice(0,60),date:r.date,createdAt:new Date(y,mo-1,dd,12,0).getTime()+i});
+    if (!isInternalCat(cat) && !debtKind(cat)){ if(kind==="income") sumIn+=amount; else sumOut+=amount; }
+    if(!from||r.date<from) from=r.date; if(!to||r.date>to) to=r.date;
+  });
+  return {items,newCats,dupes,sumIn,sumOut,guessed,learned,internal,from,to};
+}
+function tcbView(){
+  const st=S.importState, d=st.tcb, p=buildTcb();
+  const tcbW=S.wallets.find(w=>strip(w.name).includes("techcom"));
+  if (st.defWallet==null) st.defWallet = tcbW ? tcbW.id : "__tcb";
+  const wOpts = S.wallets.map(w=>`<option value="${esc(w.id)}" ${w.id===st.defWallet?"selected":""}>${esc(w.name)}</option>`).join("") + (tcbW?"":`<option value="__tcb" ${st.defWallet==="__tcb"?"selected":""}>+ Tạo ví mới "Techcombank"</option>`);
+  const other=p.items.filter(it=>strip(it.cat.name)==="khac").length;
+  $("#view").innerHTML = backBtn() + `<section class="card"><div class="row between"><h2>Sao kê Techcombank</h2><span class="small muted" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(st.fileName)}</span></div>
+      <div class="small muted">${esc(tcase(d.owner))}${d.acct?" · TK "+esc(d.acct):""}</div>
+      <div class="field"><label for="iWallet">Giao dịch thuộc ví nào</label><select class="input" id="iWallet">${wOpts}</select></div>
+      ${st.defWallet==="__tcb"&&d.open!=null?`<p class="small muted" style="margin:0">Ví mới lấy số dư đầu kỳ ${fmt(d.open)} đ; sau khi nhập sẽ khớp số dư cuối kỳ ${fmt(d.close||0)} đ của sao kê.</p>`:""}
+    </section>
+    <section class="card"><h2>Xem trước</h2>
+      <div class="balance" style="padding:0;box-shadow:none"><div class="pair">
+        <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Thu thật</span><b class="num in-c">${fmt(p.sumIn)}</b></span></div>
+        <div><span class="arrow" style="background:var(--expense)">${ARROW_OUT}</span><span style="min-width:0"><span>Chi thật</span><b class="num out-c">${fmt(p.sumOut)}</b></span></div>
+      </div></div>
+      <div class="small">Sẽ nhập <b>${p.items.length}</b> giao dịch${p.dupes?`, bỏ qua <b>${p.dupes}</b> giao dịch đã có`:""}${p.from?` · từ ${viDate(p.from)} đến ${viDate(p.to)}`:""}.</div>
+      <div class="small muted">Tự xếp hạng mục ${p.guessed+p.learned}/${p.items.length} khoản${p.learned?` (${p.learned} khoản theo cách bạn đã xếp trước đây)`:""}${p.internal?`, ${p.internal} khoản chuyển giữa tài khoản (không tính thu chi)`:""}${other?`, ${other} khoản vào "Khác"`:""}. Bấm vào từng khoản trong sổ để đổi; lần nhập sau sẽ tự xếp theo.</div>
+      ${p.newCats.length?`<p class="small muted" style="margin:0">Tạo thêm hạng mục: ${p.newCats.map(c=>esc(c.name)).join(", ")}</p>`:""}
+      <div class="list-plain">${p.items.slice(0,12).map(it=>`<div class="tx">${icoHTML(catIconKey(it.cat))}<div class="mid"><div class="t">${esc(it.note||it.cat.name)}</div><div class="s">${viDate(it.date)} · ${esc(it.cat.name)}</div></div><div class="amt num ${it.kind==="income"?"in-c":""}">${it.kind==="income"?"+":"−"}${fmt(it.amount)}</div></div>`).join("")}</div>
+      ${p.items.length>12?`<div class="small muted">… và ${p.items.length-12} giao dịch khác</div>`:""}
+      <div class="err" id="iErr" role="alert"></div>
+      <div class="btnrow"><button class="btn ghost" id="iCancel">Chọn file khác</button><button class="btn" id="iGo" ${p.items.length?"":"disabled"}>Nhập ${p.items.length} giao dịch</button></div>
+    </section>`;
+  bindBack();
+  $("#iWallet").onchange=e=>{ st.defWallet=e.target.value; tcbView(); };
+  $("#iCancel").onclick=()=>{S.importState=null; importView();};
+  $("#iGo").onclick=runTcbImport;
+}
+async function runTcbImport(){
+  const btn=$("#iGo"), err=$("#iErr"), st=S.importState; const p=buildTcb(); if(!p.items.length) return;
+  btn.disabled=true; $("#iCancel").disabled=true;
+  const batch="imp-"+Date.now(); const ids=[];
+  try{
+    let walletId=st.defWallet;
+    if (walletId==="__tcb"){ const wo=Math.max(0,...S.wallets.map(w=>w.order||0)); const ref=await S.db.collection("wallets").add({name:"Techcombank",type:"bank",icon:"bank",initial:st.tcb.open||0,order:wo+1,createdAt:Date.now()}); walletId=ref.id; st.defWallet=walletId; }
+    const catIds={}; let order=Math.max(0,...S.cats.map(c=>c.order||0));
+    for (const c of p.newCats){ const ref=await S.db.collection("categories").add({name:c.name,parent:c.parent||"",kind:c.kind,icon:c.icon,order:++order}); catIds[c.kind+"|"+strip(c.name)]=ref.id; }
+    const docs=p.items.map(it=>({id:it.id,kind:it.kind,amount:it.amount,walletId,toWalletId:"",categoryId:it.cat._new?catIds[it.kind+"|"+strip(it.cat.name)]:it.cat.id,date:it.date,note:it.note,ref:it.ref,by:S.uid||"",src:batch,createdAt:it.createdAt}));
+    docs.forEach(d=>ids.push(d.id));
+    await S.db.bulkInsert("tx",docs,n=>{ btn.textContent=`Đang nhập ${n}/${docs.length}…`; });
+    S.lastBatch={id:batch,ids}; S.importState=null; toast(`Đã nhập ${ids.length} giao dịch`); importView();
+  }catch(e){ if(ids.length) S.lastBatch={id:batch,ids}; err.textContent="Nhập dừng giữa chừng. Bấm Thử lại: giao dịch đã nhập sẽ được bỏ qua."; btn.textContent="Thử lại"; btn.disabled=false; $("#iCancel").disabled=false; if(e?.code==="invalid_argument") handleWriteErr(e); }
+}
+
 function importView(){
   const st=S.importState; let body="";
+  if (st && st.tcb) return tcbView();
   if (st && st.stc) return stcView();
   if (!st){
     body = `<section class="card"><div class="row">${icoHTML("bank","lg")}<div><h2>Nhập từ Excel</h2><p class="small muted" style="margin:4px 0 0">File của app Sổ Thu Chi, sao kê Techcombank</p></div></div>
@@ -1177,6 +1374,7 @@ function readFile(file){
       const st={wb,fileName:file.name,sheetNames:wb.SheetNames};
       const stc=wb.SheetNames.map(name=>({name,...(stcParse(XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:""}))||{})})).filter(s=>s.rows);
       if (stc.length){ st.stc=stc; S.importState=st; importView(); return; }
+      for (const name of wb.SheetNames){ const t=tcbParse(XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:""})); if(t){ st.tcb=t; S.importState=st; importView(); return; } }
       loadSheet(st, wb.SheetNames[0]);
       const head = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""}).slice(0,st.headRow+1).flat().join(" ");
       st.isTcb = /techcom|tcb/i.test(strip(head)+" "+strip(file.name));
