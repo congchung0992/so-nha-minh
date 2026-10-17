@@ -87,6 +87,10 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .balance .nw .nwbtn span:first-child{flex:1}
 .balance .nw .nwbtn .chev{font-size:16px;line-height:1}
 .balance .nw .nwbtn:active{opacity:.6}
+.balance .nw .nwh{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;letter-spacing:.07em;font-weight:800;color:var(--muted);padding-top:4px}
+.balance .nw .nwh b{font-size:14px;letter-spacing:0;color:var(--fg)}
+.balance .nw .nwh.debt{border-top:1px dashed var(--line);padding-top:10px;margin-top:4px}
+.balance .nw .nwbtn span:first-child{padding-left:10px}
 .wlhead{background:none;border:0;width:100%;text-align:left;padding:0;color:inherit}
 .wlhead .chev{font-size:18px}
 .nw.wl{display:flex;flex-direction:column;gap:6px;font-size:13.5px;border-top:1px solid var(--line);padding-top:10px}
@@ -615,28 +619,30 @@ function homeView(){
   if (S.homeSub==="wallets") return walletsDetailView();
   if (S.homeSub?.startsWith("w:")) return walletTxView(S.homeSub.slice(2));
   if (S.homeSub) return debtView(S.homeSub);
-  const bal = balances(); const total = Object.values(bal).reduce((a,b)=>a+b,0);
-  const ym = ymOf(todayStr()); const {inc,exp} = monthTotals(ym);
-  const {owe,owed} = debts(); const hasDebt = owe>0 || owed>0, net = total-owe+owed;
+  const bal = balances(); const ym = ymOf(todayStr());
+  const {owe,owed} = debts();
+  // ví "đầu tư / tiết kiệm / chứng khoán" tách riêng khỏi tiền mặt; bỏ qua ví trống chưa dùng
+  const isInvest = w => w.type==="saving" || /dau tu|tiet kiem|chung khoan|dau tu/.test(strip(w.name));
+  const used = w => (bal[w.id]||0)!==0 || S.txs.some(t=>t.walletId===w.id||t.toWalletId===w.id);
+  const ws = sortedWallets().filter(used);
+  const cashW = ws.filter(w=>!isInvest(w)), invW = ws.filter(isInvest);
+  const sum = arr => arr.reduce((s,w)=>s+(bal[w.id]||0),0);
+  const cash=sum(cashW), inv=sum(invW), have=cash+inv+owed, net=have-owe;
+  const line = (attr,label,v,cls,sign="") => `<button class="nwbtn" ${attr}><span>${label}</span><b class="num ${cls||(v<0?"out-c":"")}">${sign}${money(v)}</b><span class="chev">›</span></button>`;
   $("#view").innerHTML = `
-  <section class="balance" aria-label="Tổng số dư">
-    ${hasDebt ? `<div><div class="label">Tài sản ròng (đã trừ nợ)</div><div class="big num ${net<0?"out-c":""}">${money(net)}</div></div>
+  <section class="balance" aria-label="Tài sản">
+    <div><div class="label">Tài sản ròng</div><div class="big num ${net<0?"out-c":""}">${money(net)}</div>
+      <div class="small muted">= Đang có ${shortMoney(Math.abs(have))}${have<0?" (âm)":""} − Đang nợ ${shortMoney(owe)}</div></div>
     <div class="nw">
-      <button class="nwbtn" data-debt="wallets"><span>Tiền trong các ví</span><b class="num">${money(total)}</b><span class="chev">›</span></button>
-      ${owe?`<button class="nwbtn" data-debt="owe"><span>Đi vay chưa trả</span><b class="num out-c">−${money(owe)}</b><span class="chev">›</span></button>`:""}
-      ${owed?`<button class="nwbtn" data-debt="owed"><span>Cho vay chưa thu</span><b class="num in-c">+${money(owed)}</b><span class="chev">›</span></button>`:""}
-    </div>` : `<div><div class="label">Tổng số dư</div><div class="big num ${total<0?"out-c":""}">${money(total)}</div></div>`}
-    <div class="pair">
-      <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Thu tháng ${Number(ym.slice(5))}</span><b class="num in-c">${fmt(inc)}</b></span></div>
-      <div><span class="arrow" style="background:var(--expense)">${ARROW_OUT}</span><span style="min-width:0"><span>Chi tháng ${Number(ym.slice(5))}</span><b class="num out-c">${fmt(exp)}</b></span></div>
+      <div class="nwh"><span>ĐANG CÓ</span><b class="num">${money(have)}</b></div>
+      ${cashW.map(w=>line(`data-debt="w:${esc(w.id)}"`,esc(w.name),bal[w.id]||0)).join("") || line(`data-debt="wallets"`,"Tiền mặt",0)}
+      ${invW.map(w=>line(`data-debt="w:${esc(w.id)}"`,esc(w.name)+(/dau tu/.test(strip(w.name))?"":" <span class='tag fx'>đầu tư</span>"),bal[w.id]||0)).join("")}
+      ${owed?line(`data-debt="owed"`,"Cho vay chưa thu",owed,"in-c","+"):""}
+      <div class="nwh debt"><span>ĐANG NỢ</span><b class="num out-c">${owe?"−"+money(owe):"0 đ"}</b></div>
+      ${owe?line(`data-debt="owe"`,"Đi vay chưa trả",owe,"out-c","−"):`<div class="small muted">Không có khoản vay nào chưa trả.</div>`}
     </div>
   </section>
-  <section class="card">
-    <div class="row between"><h2>Ví của nhà mình</h2><button class="link" id="goWallets">Quản lý</button></div>
-    <div class="hscroll">${sortedWallets().map(w=>`<button class="wcard" data-debt="w:${esc(w.id)}">${icoHTML(walletIconKey(w),"sm")}<div><div class="n">${esc(w.name)}</div><b class="num ${bal[w.id]<0?"out-c":""}">${money(bal[w.id])}</b></div></button>`).join("")}</div>
-  </section>
   ${spendTrendCard(ym)}`;
-  $("#goWallets").onclick=()=>{ S.moreSub="wallets"; setTab("more"); };
   document.querySelectorAll("[data-debt]").forEach(b=>b.onclick=()=>{ S.homeSub=b.dataset.debt; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-hm]").forEach(b=>b.onclick=()=>{ S.homeMode=b.dataset.hm; render(); });
   document.querySelectorAll("[data-trend-m]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.trendM; S.repKind="expense"; setTab("report"); });
