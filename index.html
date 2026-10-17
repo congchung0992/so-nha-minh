@@ -137,6 +137,7 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .trow .sbar{display:flex;height:100%;border-radius:6px;overflow:hidden;gap:1px;transform-origin:left}
 .trow .sbar i{display:block;height:100%}
 .trow b{text-align:right;font-size:13px}
+.trow.cur .tm{color:var(--accent)} .trow.cur .track{box-shadow:0 0 0 2px var(--accent)}
 #view.enter .trow .sbar{animation:grow .7s var(--ease-out) both;animation-delay:.15s}
 .tag{font-style:normal;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 5px;margin-left:4px;vertical-align:1px}
 .tag.fx{background:color-mix(in srgb,#4f8ef7 18%,transparent);color:#4f8ef7} .tag.vr{background:color-mix(in srgb,#f5a524 18%,transparent);color:#d48a0c}
@@ -618,6 +619,7 @@ function walletTxView(id){
 function homeView(){
   if (S.homeSub==="wallets") return walletsDetailView();
   if (S.homeSub?.startsWith("w:")) return walletTxView(S.homeSub.slice(2));
+  if (S.homeSub?.startsWith("cat:")) return catTrendView(S.homeSub.slice(4));
   if (S.homeSub) return debtView(S.homeSub);
   const bal = balances(); const ym = ymOf(todayStr());
   const {owe,owed} = debts();
@@ -645,10 +647,33 @@ function homeView(){
   ${spendTrendCard(ym)}`;
   document.querySelectorAll("[data-debt]").forEach(b=>b.onclick=()=>{ S.homeSub=b.dataset.debt; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-hm]").forEach(b=>b.onclick=()=>{ S.homeMode=b.dataset.hm; render(); });
+  document.querySelectorAll("[data-cattrend]").forEach(b=>b.onclick=()=>{ S.homeSub="cat:"+b.dataset.cattrend; S.catTrendM=null; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-trend-m]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.trendM; S.repKind="expense"; setTab("report"); });
   bindCatDetail();
 }
 
+/* bấm một hạng mục ở biểu đồ 6 tháng → chi của hạng mục đó qua từng tháng; bấm tháng để xem các khoản */
+function catTrendView(cid){
+  const c=catById(cid), N=6, ym=ymOf(todayStr()); const months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(ym,-i));
+  const inCat=t=>t.kind==="expense" && t.categoryId===cid && isRealFlow(t);
+  const per=months.map(m=>{ const l=S.txs.filter(t=>inCat(t)&&ymOf(t.date)===m); return {m,l,sum:l.reduce((s,t)=>s+(+t.amount),0)}; });
+  const total=per.reduce((s,p)=>s+p.sum,0), withM=per.filter(p=>p.sum>0).length||1, max=Math.max(1,...per.map(p=>p.sum));
+  const allExp=months.reduce((s,m)=>s+monthTotals(m).exp,0);
+  if (!S.catTrendM || !months.includes(S.catTrendM)) S.catTrendM=[...per].reverse().find(p=>p.sum>0)?.m||ym;
+  const sel=per.find(p=>p.m===S.catTrendM), col=rankColor(0), fixed=isFixedCat(c);
+  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Tổng quan</button></div>
+  <section class="balance"><div class="row">${icoHTML(catIconKey(c),"lg")}<div style="min-width:0"><div class="label">${esc(c?.parent?c.parent+" › ":"")}${esc(c?.name||"Không rõ")} <em class="tag ${fixed?"fx":"vr"}">${fixed?"Cố định":"Phát sinh"}</em></div><div class="big num out-c">${money(total)}</div><div class="small muted">tổng ${N} tháng gần đây</div></div></div>
+    <div class="nw"><div><span>Trung bình mỗi tháng</span><b class="num">${money(Math.round(total/withM))}</b></div>
+    <div><span>Chiếm trong tổng chi ${N} tháng</span><b class="num">${allExp?(total/allExp*100).toFixed(1).replace(".",","):0}%</b></div>
+    <div><span>Tháng chi nhiều nhất</span><b class="num">${(()=>{ const b=[...per].sort((a,b)=>b.sum-a.sum)[0]; return b.sum?monthLabel(b.m)+" · "+shortMoney(b.sum):"–"; })()}</b></div></div></section>
+  <section class="card"><h2>Theo từng tháng</h2><div class="trend">${per.map(p=>`<button class="trow ${p.m===S.catTrendM?"cur":""}" data-ctm="${p.m}"><span class="tm">T${Number(p.m.slice(5))}</span><span class="track"><span class="sbar" style="width:${p.sum/max*100}%"><i style="width:100%;background:${col}"></i></span></span><b class="num">${p.sum?shortMoney(p.sum):"–"}</b></button>`).join("")}</div>
+    <p class="small muted" style="margin:0">Bấm vào một tháng để xem các khoản bên dưới.</p></section>
+  <section class="card" style="gap:4px"><div class="row between"><h2>${monthLabel(sel.m)}</h2><span class="small muted">${sel.l.length} khoản · <b class="num out-c">${fmt(sel.sum)}</b></span></div>
+    ${sel.l.length?`<div class="list-plain">${sortTx(sel.l).map(t=>txRow(t).replace('<div class="s">',`<div class="s">${viDate(t.date)} · `)).join("")}</div>`:emptyTx("Tháng này không chi cho hạng mục này","Chọn tháng khác ở trên.")}</section>`;
+  $("#back").onclick=()=>{ S.homeSub=null; S.catTrendM=null; render(); window.scrollTo(0,0); };
+  document.querySelectorAll("[data-ctm]").forEach(b=>b.onclick=()=>{ S.catTrendM=b.dataset.ctm; render(); });
+  bindTxRows();
+}
 /* ---------- chi tiêu 6 tháng: theo hạng mục / cố định – phát sinh ---------- */
 const FIXED_RE=/thue nha|tien nha|\bdien\b|tien dien|\bnuoc\b|tien nuoc|internet|wifi|truyen hinh|dien thoai|hoc phi|bao hiem|lai vay|tra gop|gui xe|\bgas\b|phi quan ly|dich vu sinh hoat/;
 const isFixedCat = c => !!c && (c.fixed===true || (c.fixed!==false && FIXED_RE.test(strip(c.name)+" | "+strip(c.parent||""))));
@@ -670,7 +695,7 @@ function spendTrendCard(ym){
     else segs=[[FIX_C,p.fix],[VAR_C,p.tot-p.fix]].filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join("");
     return `<button class="trow" data-trend-m="${p.m}"><span class="tm">T${Number(p.m.slice(5))}</span><span class="track"><span class="sbar" style="width:${p.tot/max*100}%">${segs}</span></span><b class="num">${p.tot?shortMoney(p.tot):"–"}</b></button>`; }).join("");
   const legendCat = ranked.slice(0,6).map(([id,v])=>{ const c=catById(id), f=isFixedCat(c);
-      return `<button class="r" data-catd="${esc(id)}"><i style="background:${colorOf(id)}"></i><span class="t">${esc(c?.name||"Không rõ")} <em class="tag ${f?"fx":"vr"}">${f?"Cố định":"Phát sinh"}</em></span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)} · TB ${shortMoney(v/months_with)}/tháng</span></button>`; }).join("")
+      return `<button class="r" data-cattrend="${esc(id)}"><i style="background:${colorOf(id)}"></i><span class="t">${esc(c?.name||"Không rõ")} <em class="tag ${f?"fx":"vr"}">${f?"Cố định":"Phát sinh"}</em></span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)} · TB ${shortMoney(v/months_with)}/tháng</span></button>`; }).join("")
     + (ranked.length>6 ? `<div class="r"><i style="background:${CHART_REST}"></i><span class="t">${ranked.length-6} hạng mục khác</span><b class="num small">${pct(ranked.slice(6).reduce((s,r)=>s+r[1],0))}</b></div>` : "");
   const fixCats=ranked.filter(([id])=>isFixedCat(catById(id)));
   const legendFix = `<div class="fxsum">
