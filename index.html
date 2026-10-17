@@ -86,6 +86,10 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .balance .nw .nwbtn span:first-child{flex:1}
 .balance .nw .nwbtn .chev{font-size:16px;line-height:1}
 .balance .nw .nwbtn:active{opacity:.6}
+.nw.wl{display:flex;flex-direction:column;gap:6px;font-size:13.5px;border-top:1px solid var(--line);padding-top:10px}
+.nw.wl > div{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.nw.wl span{color:var(--muted)} .nw.wl b{font-weight:700;white-space:nowrap}
+.nw.wl .tot{border-top:1px dashed var(--line);padding-top:6px} .nw.wl .tot span{color:var(--fg);font-weight:700}
 .debtlist .tx .mid .t{white-space:normal;overflow-wrap:anywhere}
 .balance .pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .balance .pair > div{border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;min-width:0;background:var(--surface-2)}
@@ -524,7 +528,31 @@ function debtView(type){
   $("#back").onclick=()=>{ S.homeSub=null; render(); window.scrollTo(0,0); };
   bindTxRows();
 }
+/* bảng chi tiết khi bấm "Tiền trong các ví": số dư từng ví được cộng từ đâu */
+function walletsDetailView(){
+  const bal=balances(); let sum=0;
+  const rows=sortedWallets().map(w=>{ const r={w,initial:Number(w.initial)||0,inc:0,exp:0,tin:0,tout:0,n:0};
+    for (const t of S.txs){ const a=+t.amount||0;
+      if (t.kind==="transfer"){ if(t.walletId===w.id){r.tout+=a;r.n++} else if(t.toWalletId===w.id){r.tin+=a;r.n++} }
+      else if (t.walletId===w.id){ r.n++; if(t.kind==="income") r.inc+=a; else r.exp+=a; } }
+    sum+=bal[w.id]||0; return r; });
+  const line=(l,v,cls)=> v ? `<div><span>${l}</span><b class="num ${cls||""}">${v<0?"−":(cls==="in-c"?"+":"")}${money(Math.abs(v))}</b></div>` : "";
+  $("#view").innerHTML = `<div><button class="chip" id="back">‹ Tổng quan</button></div>
+  <section class="balance">
+    <div><div class="label">Tiền trong các ví</div><div class="big num ${sum<0?"out-c":""}">${money(sum)}</div></div>
+    <div class="nw">${rows.map(r=>`<div><span>${esc(r.w.name)}</span><b class="num ${bal[r.w.id]<0?"out-c":""}">${money(bal[r.w.id]||0)}</b></div>`).join("")}</div>
+  </section>
+  ${rows.map(r=>`<section class="card"><div class="row">${icoHTML(walletIconKey(r.w),"lg")}<div style="min-width:0;flex:1"><h2>${esc(r.w.name)}</h2><div class="small muted">${r.n} giao dịch</div></div><b class="num ${bal[r.w.id]<0?"out-c":""}">${money(bal[r.w.id]||0)}</b></div>
+    <div class="nw wl">
+      <div><span>Số dư ban đầu</span><b class="num">${money(r.initial)}</b></div>
+      ${line("Tổng thu",r.inc,"in-c")}${line("Tổng chi",-r.exp,"out-c")}${line("Chuyển từ ví khác vào",r.tin,"in-c")}${line("Chuyển sang ví khác",-r.tout,"out-c")}
+      <div class="tot"><span>Số dư hiện tại</span><b class="num ${bal[r.w.id]<0?"out-c":""}">${money(bal[r.w.id]||0)}</b></div>
+    </div></section>`).join("")}
+  <p class="small muted" style="margin:0 4px">Số dư ban đầu và tên ví sửa trong Cài đặt → Ví và tài khoản.</p>`;
+  $("#back").onclick=()=>{ S.homeSub=null; render(); window.scrollTo(0,0); };
+}
 function homeView(){
+  if (S.homeSub==="wallets") return walletsDetailView();
   if (S.homeSub) return debtView(S.homeSub);
   const bal = balances(); const total = Object.values(bal).reduce((a,b)=>a+b,0);
   const ym = ymOf(todayStr()); const {inc,exp} = monthTotals(ym);
@@ -535,7 +563,7 @@ function homeView(){
   <section class="balance" aria-label="Tổng số dư">
     ${hasDebt ? `<div><div class="label">Tài sản ròng (đã trừ nợ)</div><div class="big num ${net<0?"out-c":""}">${money(net)}</div></div>
     <div class="nw">
-      <div><span>Tiền trong các ví</span><b class="num">${money(total)}</b></div>
+      <button class="nwbtn" data-debt="wallets"><span>Tiền trong các ví</span><b class="num">${money(total)}</b><span class="chev">›</span></button>
       ${owe?`<button class="nwbtn" data-debt="owe"><span>Đi vay chưa trả</span><b class="num out-c">−${money(owe)}</b><span class="chev">›</span></button>`:""}
       ${owed?`<button class="nwbtn" data-debt="owed"><span>Cho vay chưa thu</span><b class="num in-c">+${money(owed)}</b><span class="chev">›</span></button>`:""}
     </div>` : `<div><div class="label">Tổng số dư</div><div class="big num ${total<0?"out-c":""}">${money(total)}</div></div>`}
@@ -546,7 +574,7 @@ function homeView(){
   </section>
   <section class="card">
     <div class="row between"><h2>Ví của nhà mình</h2><button class="link" id="goWallets">Quản lý</button></div>
-    <div class="hscroll">${sortedWallets().map(w=>`<div class="wcard">${icoHTML(walletIconKey(w),"sm")}<div><div class="n">${esc(w.name)}</div><b class="num ${bal[w.id]<0?"out-c":""}">${money(bal[w.id])}</b></div></div>`).join("")}</div>
+    <div class="hscroll">${sortedWallets().map(w=>`<button class="wcard" data-debt="wallets">${icoHTML(walletIconKey(w),"sm")}<div><div class="n">${esc(w.name)}</div><b class="num ${bal[w.id]<0?"out-c":""}">${money(bal[w.id])}</b></div></button>`).join("")}</div>
   </section>
   <section class="card">
     <div class="row between"><h2>Chi tiêu tháng ${Number(ym.slice(5))}</h2><button class="link" id="goReport">Chi tiết</button></div>
