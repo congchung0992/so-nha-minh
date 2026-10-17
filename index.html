@@ -74,6 +74,7 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .ico.sm{width:32px;height:32px;border-radius:10px}
 .ico.lg{width:52px;height:52px;border-radius:17px}
 .ico.solid{background:var(--c);color:#fff}
+.ico.av{font-size:12px;font-weight:800;letter-spacing:.02em} .ico.lg.av{font-size:17px}
 
 /* Thẻ số dư */
 .balance{background:var(--surface);border-radius:20px;padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
@@ -450,7 +451,7 @@ const byName = id => !id ? "" : (id===S.uid ? "Bạn" : (S.profiles[id] || "Ngư
 /* ---------- điều hướng ---------- */
 function markTab(t){ document.querySelectorAll("nav.tabs button").forEach(b=> b.dataset.tab===t ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current")); }
 function setTab(t){ S.tab=t; if(t==="add" && !S.editId) S.form=null; if(t!=="add") S.editId=null; S.confirmDel=false; markTab(t); render(); window.scrollTo(0,0); }
-document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ if(b.dataset.tab==="more") S.moreSub="menu"; if(b.dataset.tab==="home") S.homeSub=null; if(b.dataset.tab==="report") S.repCat=null; setTab(b.dataset.tab); }));
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ if(b.dataset.tab==="more") S.moreSub="menu"; if(b.dataset.tab==="home") S.homeSub=null; if(b.dataset.tab==="report"){ S.repCat=null; S.repParty=null; } setTab(b.dataset.tab); }));
 
 function render(){
   const v = $("#view");
@@ -458,7 +459,7 @@ function render(){
   if (!(S.ready.w && S.ready.c && S.ready.t)) return;
   const needSetup = !S.cats.length || !S.wallets.length;
   if (needSetup && S.tab!=="more"){ v.innerHTML = setupView(); bindSetup(); enterView("setup"); return; }
-  const vkey=[S.tab,S.moreSub,S.month,S.editId,S.homeSub,S.repCat].join("|");
+  const vkey=[S.tab,S.moreSub,S.month,S.editId,S.homeSub,S.repCat,S.repParty].join("|");
   ({home:homeView, book:bookView, add:formView, report:reportView, more:moreView})[S.tab]();
   enterView(vkey);
 }
@@ -830,9 +831,41 @@ async function saveForm(){
 }
 
 /* ---------- Báo cáo ---------- */
+/* người nhận / người chuyển: phần đầu ghi chú "Đối tác · nội dung" (sao kê ngân hàng); quẹt thẻ thì lấy tên cửa hàng */
+const partyNone = kind => kind==="income" ? "Không rõ người chuyển" : "Không rõ người nhận";
+function partyOf(t){
+  const note=String(t.note||"").trim(), seg=note.split(" · ");
+  if (seg.length>=2) return (seg[0]==="Thẻ Visa"||seg[0]==="Hoàn tiền thẻ") ? seg[1].trim() : seg[0].trim();
+  // khoản từ sao kê chỉ có tên đối tác, không có nội dung: "Nguyen Thi Ngan", "Wincommerce", "Fpt Pharma"
+  if (String(t.id).startsWith("tcb-") && /^[A-Z0-9][A-Za-z0-9&.\-]*( [A-Z0-9][A-Za-z0-9&.\-]*){0,6}$/.test(note)) return note;
+  return "";
+}
+function byParty(ym, kind){
+  const m={}; S.txs.forEach(t=>{ if(t.kind!==kind || ymOf(t.date)!==ym || !isRealFlow(t)) return; const k=partyOf(t); const e=m[k]||(m[k]=[k,0,0]); e[1]+=+t.amount; e[2]++; });
+  return Object.values(m).sort((a,b)=>b[1]-a[1]);
+}
+const initials = name => { const w=String(name||"?").trim().split(/\s+/).filter(Boolean); return ((w[0]||"?")[0]+(w.length>1?w[w.length-1][0]:"")).toUpperCase(); };
+function partyDetailView(){
+  const kind=S.repKind||"expense", party=S.repParty==="\u0000"?"":S.repParty;
+  const list=sortTx(S.txs.filter(t=>t.kind===kind && ymOf(t.date)===S.month && isRealFlow(t) && partyOf(t)===party));
+  const sum=list.reduce((s,t)=>s+(+t.amount),0); const {inc,exp}=monthTotals(S.month); const all=kind==="income"?inc:exp;
+  const groups={}; list.forEach(t=>(groups[t.date]=groups[t.date]||[]).push(t));
+  const cats={}; list.forEach(t=>{ const n=catById(t.categoryId)?.name||"Không rõ"; cats[n]=(cats[n]||0)+(+t.amount); });
+  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Báo cáo</button></div>${monthBar()}
+  <section class="balance"><div class="row"><span class="ico lg av" style="--c:${rankColor(0)}">${esc(initials(party||"?"))}</span><div style="min-width:0"><div class="label">${esc(party||partyNone(kind))}</div><div class="big num ${kind==="income"?"in-c":"out-c"}">${money(sum)}</div></div></div>
+    <div class="nw"><div><span>Số khoản</span><b class="num">${list.length}</b></div>
+    <div><span>Chiếm trong ${kind==="income"?"tổng thu":"tổng chi"} ${monthLabel(S.month).toLowerCase()}</span><b class="num">${all?(sum/all*100).toFixed(1).replace(".",","):0}%</b></div>
+    ${Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`<div><span>· ${esc(n)}</span><b class="num">${fmt(v)}</b></div>`).join("")}</div></section>
+  ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const tot=g.reduce((s,t)=>s+(+t.amount),0);
+    return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num">${kind==="income"?"+":"−"}${fmt(tot)}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
+    : `<div class="card">${emptyTx("Tháng này không có khoản nào","Chuyển sang tháng khác bằng nút ‹ ›.")}</div>`}`;
+  $("#back").onclick=()=>{ S.repParty=null; render(); window.scrollTo(0,0); };
+  bindMonthBar(); bindTxRows();
+}
 function reportView(){
   if (S.repCat) return catDetailView();
-  const kind = S.repKind||"expense";
+  if (S.repParty!=null) return partyDetailView();
+  const kind = S.repKind||"expense", group = S.repGroup||"cat";
   const N=12; const months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(S.month,-i));
   const data = months.map(m=>({m, ...monthTotals(m)}));
   const sumI=data.reduce((s,d)=>s+d.inc,0), sumE=data.reduce((s,d)=>s+d.exp,0);
@@ -849,12 +882,19 @@ function reportView(){
     <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rk="expense" aria-pressed="${kind==="expense"}">Chi tiền</button><button data-rk="income" aria-pressed="${kind==="income"}">Thu tiền</button></div>
     <div class="donutwrap">${donut(rows,total,`${kind==="income"?"Tổng thu":"Tổng chi"}<b class="num">${shortMoney(total)}</b>`)}${legend(rows,total,6).replace("Chưa có khoản chi nào",kind==="income"?"Chưa có khoản thu nào":"Chưa có khoản chi nào")}</div>
   </section>
-  ${rows.length?`<section class="card"><h2>${kind==="income"?"Thu":"Chi"} theo hạng mục</h2>${rows.map(([id,v],i)=>{ const c=catById(id); const p=total?v/total*100:0;
-    return `<button class="catrow" data-catd="${esc(id)}" style="--c:${rankColor(i)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b>${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")}</section>`:""}
+  ${rows.length?`<section class="card">
+    <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-rg="cat" aria-pressed="${group==="cat"}">Theo hạng mục</button><button data-rg="party" aria-pressed="${group==="party"}">${kind==="income"?"Theo người chuyển":"Theo người nhận"}</button></div>
+    ${group==="cat" ? rows.map(([id,v],i)=>{ const c=catById(id); const p=total?v/total*100:0;
+    return `<button class="catrow" data-catd="${esc(id)}" style="--c:${rankColor(i)}">${icoHTML(catIconKey(c),"sm")}<span class="nm">${esc(c?.name||"Không rõ")}</span><span class="num small"><b>${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")
+    : byParty(S.month,kind).map(([name,v,n],i)=>{ const p=total?v/total*100:0;
+    return `<button class="catrow" data-party="${esc(name)}" style="--c:${rankColor(i)}"><span class="ico sm av" style="--c:${rankColor(i)}">${esc(initials(name))}</span><span class="nm">${esc(name||partyNone(kind))}</span><span class="num small"><b>${fmt(v)}</b> <span class="muted">${p.toFixed(p<10?1:0).replace(".",",")}%</span> <span class="chev">›</span></span><div class="bar"><i style="width:${p}%"></i></div></button>`; }).join("")}
+  </section>`:""}
   <section class="card"><h2>Thu chi ${N} tháng</h2>${table}<p class="small muted" style="margin:0">Chỉ tính tiền thật sự kiếm được và tiêu mất. Không tính chuyển giữa các ví, đi vay, cho vay, trả nợ, thu nợ và điều chỉnh số dư. Các khoản này vẫn có trong sổ và số dư ví.</p></section>`;
   bindMonthBar();
   document.querySelectorAll("[data-ym]").forEach(b=>b.onclick=()=>{ S.month=b.dataset.ym; render(); window.scrollTo(0,0); });
   document.querySelectorAll("[data-rk]").forEach(b=>b.onclick=()=>{ S.repKind=b.dataset.rk; reportView(); });
+  document.querySelectorAll("[data-rg]").forEach(b=>b.onclick=()=>{ S.repGroup=b.dataset.rg; reportView(); });
+  document.querySelectorAll("[data-party]").forEach(b=>b.onclick=()=>{ S.repParty=b.dataset.party||"\u0000"; render(); window.scrollTo(0,0); });
   bindCatDetail();
 }
 /* bấm một hạng mục (biểu đồ tròn hoặc danh sách) → các khoản của hạng mục đó trong tháng */
