@@ -313,6 +313,7 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .note{background:var(--warn-bg);color:var(--warn-fg);border-radius:14px;padding:12px 14px;font-size:var(--fs-md)}
 .empty{text-align:center;padding:20px 12px;color:var(--muted);display:flex;flex-direction:column;gap:8px;align-items:center}
 .empty b{color:var(--fg);font-size:var(--fs-lg)}
+.applogo{width:88px;height:88px;border-radius:24px;box-shadow:0 10px 26px rgba(11,93,107,.28)}
 .empty .art{width:84px;height:84px;border-radius:26px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
 .empty .art svg{width:46px;height:46px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 
@@ -642,7 +643,7 @@ function setupView(){
   const ro = S.canWrite===false;
   const preview = DEFAULT_CATS.expense.slice(0,8);
   return `<div class="card">
-    <div class="empty" style="padding-bottom:4px"><span class="art"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg></span><b>Mở sổ cho cả nhà</b><span class="small">Tạo sẵn ví Tiền mặt, Ngân hàng và ${DEFAULT_CATS.expense.length+DEFAULT_CATS.income.length} hạng mục thu chi quen thuộc, có icon riêng. Sửa, thêm, bớt lúc nào cũng được.</span></div>
+    <div class="empty" style="padding-bottom:4px"><img class="applogo" src="icon.svg" alt="" width="88" height="88"><b>Mở sổ cho cả nhà</b><span class="small">Tạo sẵn ví Tiền mặt, Ngân hàng và ${DEFAULT_CATS.expense.length+DEFAULT_CATS.income.length} hạng mục thu chi quen thuộc, có icon riêng. Sửa, thêm, bớt lúc nào cũng được.</span></div>
     <div class="catgrid">${preview.map(([n,k])=>`<div class="catbtn">${icoHTML(k)}<span class="n">${esc(n)}</span></div>`).join("")}</div>
     ${ro ? `<div class="note">Bạn chưa có quyền ghi vào sổ này.</div>` : `<button class="btn" id="doSetup">Tạo sổ mới</button>
     <button class="btn ghost" id="doImport">Lấy dữ liệu từ file Sổ Thu Chi (.xlsx)</button>
@@ -2323,7 +2324,7 @@ async function resolveProfiles(){}
 function authView(msg){
   const mode=S.authMode||"login";
   $("#view").innerHTML = `<section class="card">
-    <div class="empty" style="padding-bottom:0"><span class="art"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg></span><b>${mode==="signup"?"Tạo tài khoản":"Đăng nhập sổ"}</b><span class="small">Mỗi người trong nhà dùng một email riêng, cùng ghi vào một sổ.</span></div>
+    <div class="empty" style="padding-bottom:0"><img class="applogo" src="icon.svg" alt="Sổ Nhà Mình" width="88" height="88"><b>${mode==="signup"?"Tạo tài khoản":"Đăng nhập sổ"}</b><span class="small">Mỗi người trong nhà dùng một email riêng, cùng ghi vào một sổ.</span></div>
     <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-am="login" aria-pressed="${mode==="login"}">Đăng nhập</button><button data-am="signup" aria-pressed="${mode==="signup"}">Tạo tài khoản</button></div>
     <div class="field"><label for="aEmail">Email</label><input class="input" id="aEmail" type="email" autocomplete="email" inputmode="email" placeholder="ban@gmail.com" value="${esc(S.lastEmail||"")}"></div>
     <div class="field"><label for="aPass">Mật khẩu</label><input class="input" id="aPass" type="password" autocomplete="${mode==="signup"?"new-password":"current-password"}" placeholder="Ít nhất 6 ký tự"></div>
