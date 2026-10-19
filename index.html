@@ -10,8 +10,6 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap">
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/supabase.min.js"></script>
 <script src="config.js"></script>
@@ -30,7 +28,8 @@ body{margin:0} img{max-width:100%} [hidden]{display:none!important}
   /* 2 cỡ chữ của cả app: chữ to (tiêu đề, số nổi bật) · chữ thường (mọi chữ còn lại).
      Số tiền cỡ đại = bội số của chữ to. */
   --fs-lg:17px; --fs-md:15px;
-  --f:"Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* font hệ thống như app Sổ thu chi MISA: iPhone = San Francisco, Android = Roboto, Windows = Segoe UI */
+  --f:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Roboto, "Segoe UI", system-ui, Arial, sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0e1419; --surface:#172028; --surface-2:#1e2932; --line:#2a3640;
