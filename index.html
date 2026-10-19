@@ -238,6 +238,11 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .toast{display:flex;align-items:center;gap:12px} .toast .undo{border:0;background:none;color:var(--accent-soft);font-weight:800;padding:2px 0;text-decoration:underline}
 .listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 2px}
 .catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 6px}
+.catgroups{display:flex;flex-direction:column;gap:10px}
+.catsec[hidden]{display:none}
+.cathead{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:12px;background:color-mix(in srgb,var(--c) 10%,var(--surface-2));margin-bottom:4px}
+.cathead.lone{--c:#8a94a0}
+.cathead b{font-weight:700} .cathead .muted{margin-left:auto}
 /* nhập nhanh */
 .micbtn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:7px 14px 7px 10px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
 .micbtn svg,.vmic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -1180,10 +1185,10 @@ function voiceSheet(){
       cbox.innerHTML=`<div class="row between"><h2>Hạng mục</h2><span class="small muted">chạm để chọn</span></div>
         <div class="catsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="input" id="vCatQ" type="search" placeholder="Tìm hạng mục, ví dụ: điện, chợ, con…" autocomplete="off" aria-label="Tìm hạng mục"></div>
         <div class="vsug"><div class="flabel">Gợi ý</div><div class="quick" id="vSug"></div></div>
-        <div class="catgrid">${all.map(x=>`<button class="catbtn" style="--c:${catColor(x)}" data-vc="${esc(x.id)}" data-s="${esc(strip(x.name+" "+(x.parent||"")))}">${icoHTML(catIconKey(x))}<span class="n">${esc(x.name)}</span></button>`).join("")}</div>
+        <div class="catgroups">${groupedCatGrid(all,"data-vc","")}</div>
         <p class="small muted" id="vCatNone" hidden style="margin:0;text-align:center">Không có hạng mục nào khớp.</p>`;
       const q=$("#vCatQ"); q.oninput=()=>{ const w=strip(q.value).split(/\s+/).filter(Boolean); let n=0;
-        cbox.querySelectorAll(".catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; });
+        cbox.querySelectorAll(".catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; }); syncCatSections(cbox);
         $("#vCatNone").hidden=n>0; cbox.querySelector(".vsug").hidden=w.length>0; };
       cbox.addEventListener("click",e=>{ const b=e.target.closest("[data-vc]"); if(!b) return; pickedCat=b.dataset.vc; show(); }); }
     const ids=[...new Set([auto,...cands,...frequentCats(kind,8).map(x=>x.id)].filter(id=>id&&catById(id)))].slice(0,8);
@@ -1209,6 +1214,24 @@ function voiceSheet(){
   micb.onclick=()=>{ if(micb.classList.contains("on")){ try{rec.stop()}catch(e){} } else start(); };
   start();
 }
+/* lưới chọn hạng mục chia theo nhóm (giống MISA): nhóm có mục con → dòng tiêu đề + các mục chi tiết;
+   các hạng mục đứng riêng gom vào mục "Hạng mục lẻ" ở cuối */
+function groupedCatGrid(cats, attr, sel){
+  const g=c=>(c.parent||c.name||"").trim(), size={}; cats.forEach(c=>size[g(c)]=(size[g(c)]||0)+1);
+  const secs=[], at={}, lone=[];
+  cats.forEach(c=>{ const n=g(c);
+    if (size[n]>1){ if(at[n]==null){ at[n]=secs.length; secs.push({name:n,list:[]}); } secs[at[n]].list.push(c); }
+    else lone.push(c); });
+  if (lone.length) secs.push({name:null,list:lone});
+  const tile=(c,label)=>`<button class="catbtn" style="--c:${catColor(c)}" ${attr}="${esc(c.id)}" data-s="${esc(strip(c.name+" "+(c.parent||"")))}" aria-pressed="${sel===c.id}">${icoHTML(catIconKey(c))}<span class="n">${esc(label||c.name)}</span></button>`;
+  return secs.map(({name,list})=>{
+    if (name===null) return `<div class="catsec">${secs.length>1?`<div class="cathead lone">${icoHTML("other","xs")}<b>Hạng mục lẻ</b><span class="muted">${list.length} mục</span></div>`:""}<div class="catgrid">${list.map(c=>tile(c)).join("")}</div></div>`;
+    const main=list.find(c=>!c.parent&&c.name===name), kids=[...(main?[main]:[]),...list.filter(c=>c!==main)];
+    const ico=main?catIconKey(main):guessIcon(name)!=="other"?guessIcon(name):catIconKey(list[0]);
+    return `<div class="catsec"><div class="cathead" style="--c:${catColor(main||list[0])}">${icoHTML(ico,"xs")}<b>${esc(name)}</b><span class="muted">${list.length} mục</span></div><div class="catgrid">${kids.map(c=>tile(c,c===main?"Chung":"")).join("")}</div></div>`; }).join("");
+}
+// sau khi lọc tìm kiếm: ẩn nhóm không còn mục nào
+const syncCatSections = root => root.querySelectorAll(".catsec").forEach(sec=>{ sec.hidden=![...sec.querySelectorAll(".catbtn")].some(b=>!b.hidden); });
 function blankForm(){ const ws=sortedWallets(); return {kind:"expense",amount:"",categoryId:"",walletId:ws[0]?.id||"",toWalletId:ws[1]?.id||"",date:todayStr(),note:""}; }
 function formView(){
   if (!S.form) S.form = blankForm();
@@ -1244,7 +1267,7 @@ function formView(){
     <div class="row between"><h2>Hạng mục</h2><button class="link" id="editCats">Sửa hạng mục</button></div>
     ${cats.length>8?`<div class="catsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="input" id="catQ" type="search" placeholder="Tìm hạng mục, ví dụ: điện, chợ, con…" autocomplete="off" aria-label="Tìm hạng mục"></div>`:""}
     ${freq.length>=4 && cats.length>8 ? `<div class="freqrow" id="freqRow"><div class="flabel">Hay dùng</div><div class="quick">${freq.map(c=>`<button class="chip fq" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c),"xs")}${esc(c.name)}</button>`).join("")}</div></div>` : ""}
-    <div class="catgrid">${cats.map(c=>`<button class="catbtn" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" data-s="${esc(strip(c.name+" "+(c.parent||"")))}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c))}<span class="n">${esc(c.name)}</span></button>`).join("")}</div>
+    <div class="catgroups">${groupedCatGrid(cats,"data-cat",f.categoryId)}</div>
     <p class="small muted" id="catNone" hidden style="margin:0;text-align:center">Không có hạng mục nào khớp. Bấm “Sửa hạng mục” để thêm mới.</p>
   </section>`}
   <div class="err" id="fErr" role="alert"></div>
@@ -1259,7 +1282,7 @@ function formView(){
   document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ f.amount=Number(b.dataset.q); formView(); });
   $("[data-x]").onclick=()=>{ f.amount=(Number(f.amount)||0)*1000; formView(); };
   const cq=$("#catQ"); if(cq) cq.oninput=()=>{ const w=strip(cq.value).split(/\s+/).filter(Boolean); let n=0;
-    document.querySelectorAll(".catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; }); $("#catNone").hidden=n>0; const fr=$("#freqRow"); if(fr) fr.hidden=w.length>0; };
+    document.querySelectorAll(".catgroups .catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; }); syncCatSections($("#view")); $("#catNone").hidden=n>0; const fr=$("#freqRow"); if(fr) fr.hidden=w.length>0; };
   const markCat=()=>document.querySelectorAll("[data-cat]").forEach(z=>z.setAttribute("aria-pressed", z.dataset.cat===f.categoryId));
   document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{ f.categoryId=b.dataset.cat; markCat(); });
   // ghi nhanh: điền hạng mục, ghi chú, số tiền, ví như lần trước; giữ ngày đang chọn
