@@ -280,10 +280,13 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .picker button[aria-pressed="true"]{border-color:var(--accent)}
 .picker .ico{width:38px;height:38px;border-radius:12px}
 .catedit{display:flex;align-items:center;gap:10px;padding:6px 0}
-.cgroup{display:flex;align-items:center;gap:10px;width:100%;padding:8px 0;border:0;background:none;color:inherit;text-align:left}
+.cgroup{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px 8px 0;margin:4px 0;border:0;border-radius:14px;background:none;color:inherit;text-align:left;transition:background-color .15s}
+.cgroup[aria-expanded="true"]{background:var(--surface-2);padding-left:8px}
 .cgroup .t{flex:1;min-width:0;display:flex;flex-direction:column;font-weight:700}
 .cgroup .t .small{font-weight:500}
-.cgroup .chev{font-size:12px;color:var(--muted);padding:0 6px}
+.cgroup .chev{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--surface-2);color:var(--muted);flex:none}
+.cgroup .chev svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+.cgroup[aria-expanded="true"] .chev{background:var(--surface)} .cgroup[aria-expanded="true"] .chev svg{transform:rotate(180deg)}
 .ckids{border-left:2px solid var(--line);padding-left:10px;margin:0 0 6px 20px}
 .catedit .ib{border:0;background:none;padding:0;border-radius:14px}
 .catedit input{flex:1;min-width:0}
@@ -372,7 +375,7 @@ const ICONS = {
   pet:{c:"#b0773c",d:'<path d="M12 12.5c-3 0-6 3.4-6 6 0 1.7 1.8 2.5 6 2.5s6-.8 6-2.5c0-2.6-3-6-6-6z"/><circle cx="6" cy="9" r="1.8"/><circle cx="18" cy="9" r="1.8"/><circle cx="9.5" cy="5" r="1.8"/><circle cx="14.5" cy="5" r="1.8"/>'},
   tools:{c:"#6b7a8c",d:'<path d="M14.5 5.5a4 4 0 0 0 4.9 4.9l-9 9a2.1 2.1 0 0 1-3-3l9-9a4 4 0 0 0-1.9-1.9z"/><path d="M14.5 5.5l2-2 4 4-2 2"/>'},
   shield:{c:"#2f8f6a",d:'<path d="M12 3l7.5 3v5.5c0 4.8-3.3 8.2-7.5 9.5-4.2-1.3-7.5-4.7-7.5-9.5V6z"/><path d="M8.8 12l2.2 2.2 4.3-4.4"/>'},
-  receipt:{c:"#77838f",d:'<path d="M6 3h12v18l-2.5-1.5L13 21l-2-1.5L8.5 21 6 19.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>'},
+  receipt:{c:"#5f7fa8",d:'<path d="M6 3h12v18l-2.5-1.5L13 21l-2-1.5L8.5 21 6 19.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>'},
   tv:{c:"#4a5bd0",d:'<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8.5 21h7M12 17v4M10.5 9l3.5 2-3.5 2z"/>'},
   sport:{c:"#20a36b",d:'<path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/>'},
   baby:{c:"#f4a03c",d:'<circle cx="12" cy="12.5" r="7.5"/><path d="M9.5 11.5h.01M14.5 11.5h.01M9.8 15a3 3 0 0 0 4.4 0M12 5c-1.2-1.5 0-2.5 1.2-2"/>'},
@@ -384,7 +387,14 @@ const ICONS = {
   piggy:{c:"#ef6a9a",d:'<path d="M4 12a7 6 0 0 1 11.5-4.6H18v2.6l2 1v3.5l-2 .8a6.5 6.5 0 0 1-2.8 2.9V21h-3v-1.6a8.5 8.5 0 0 1-2.4 0V21h-3v-2.5A6 6 0 0 1 4 12z"/><path d="M9 6.2a3 3 0 0 1 4-1.2M15.5 11h.01"/>'},
   coins:{c:"#d39a12",d:'<ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v4.5c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8V6M5 10.5V15c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8v-4.5"/>'},
   handshake:{c:"#5b6be0",d:'<path d="M2.5 11.5L6 8l3 1 3-2.5 3 .5 3.5-1 3 3.5-3.5 4"/><path d="M6 8l-3.5 3.5 6 6c.8.8 2 .8 2.8 0l5.7-5.7"/><path d="M9 12.5l2 2M11 10.5l2.5 2.5"/>'},
-  other:{c:"#8a94a0",d:'<circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/>'},
+  other:{c:"#7f8ea3",d:'<rect x="4" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8"/><circle cx="16.75" cy="16.75" r="3.25"/>'},
+  bulb:{c:"#f2a516",d:'<path d="M9 17.5h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2v1.5h5V16c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>'},
+  cocktail:{c:"#c2459b",d:'<path d="M4 4h16l-8 9z"/><path d="M12 13v7.5M8 20.5h8M15.5 4l2.5-1.5"/><circle cx="18.5" cy="7.5" r="1.4"/>'},
+  loan:{c:"#d0612f",d:'<rect x="3" y="5" width="13" height="13" rx="2"/><path d="M3 9.5h13M7 3v4M12 3v4"/><circle cx="17.5" cy="16.5" r="4"/><path d="M17.5 14.6v3.8M15.9 16.5h3.2"/>'},
+  percent:{c:"#c9472f",d:'<path d="M19 5L5 19"/><circle cx="7" cy="7" r="2.6"/><circle cx="17" cy="17" r="2.6"/>'},
+  lend:{c:"#2f9e7a",d:'<circle cx="15.5" cy="6.5" r="3.5"/><path d="M15.5 5v3"/><path d="M2.5 13v8M2.5 14.5h3l3.5-1.5h4a1.5 1.5 0 0 1 0 3H10M5.5 20h8l6.4-4.4a1.6 1.6 0 0 0-1.9-2.6l-3.6 2"/>'},
+  gem:{c:"#8e5bd6",d:'<path d="M7 4h10l4 5-9 11L3 9z"/><path d="M3 9h18M10 4L8.5 9 12 20l3.5-11L14 4"/>'},
+  inflow:{c:"#16a06a",d:'<path d="M12 3v11M7.5 9.5L12 14l4.5-4.5"/><path d="M3.5 14v4.5a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V14"/>'},
   cash:{c:"#16a06a",d:'<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.8"/><path d="M6 12h.01M18 12h.01"/>'},
   bank:{c:"#2f6bd0",d:'<path d="M3 9.5L12 4l9 5.5M5 10v7.5M9.5 10v7.5M14.5 10v7.5M19 10v7.5M3 20h18"/>'},
   card:{c:"#7b61d6",d:'<rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/>'},
@@ -395,9 +405,12 @@ const ICONS = {
   transfer:{c:"#5b6be0",d:'<path d="M4 8h15l-3.5-3.5M20 16H5l3.5 3.5"/>'}
 };
 ICONS.saving.d = ICONS.piggy.d;
-const ICON_KEYS = Object.keys(ICONS).filter(k=>!["cash","bank","card","saving","ewallet","transfer","calendar","pen"].includes(k));
+const ICON_KEYS = Object.keys(ICONS).filter(k=>!["cash","saving","ewallet","transfer","calendar","pen"].includes(k));
 const WICON_KEYS = ["cash","bank","card","saving","ewallet"];
 const NAME_HINTS = [
+  [/cho vay/,"lend"],[/lai vay/,"percent"],[/di vay|tra no|tra gop|khoan vay/,"loan"],[/ngan hang|phi chuyen|phi the/,"bank"],[/^thue(?! nha)|le phi|^phi\b/,"receipt"],
+  [/dich vu sinh hoat|sinh hoat|tien ich/,"bulb"],[/huong thu|tiec|nhau|\bbar\b/,"cocktail"],[/trang phuc|may mac/,"shirt"],
+  [/phu kien|trang suc|dong ho/,"gem"],[/tien vao|nhan tien/,"inflow"],
   [/sua chua nha|sua nha|bao duong/,"tools"],[/gui xe|xe may|sua xe/,"bike"],[/dien thoai|cuoc|\bsim\b|nap the/,"phone"],
   [/an uong|\bcom\b|nha hang|an sang|an trua|an toi|an vat/,"food"],[/di cho|^cho\b|sieu thi|thuc pham/,"market"],[/cafe|ca phe|tra sua|do uong/,"coffee"],
   [/tien dien|^dien\b/,"bolt"],[/nuoc/,"drop"],[/internet|wifi/,"wifi"],[/truyen hinh|netflix|youtube/,"tv"],[/tien nha|thue nha|nha cua/,"home"],
@@ -410,7 +423,8 @@ const NAME_HINTS = [
 ];
 function guessIcon(name){ const s=strip(name); for(const [re,k] of NAME_HINTS) if(re.test(s)) return k; return "other"; }
 function icoHTML(key, cls=""){ const i=ICONS[key]||ICONS.other; return `<span class="ico ${cls}" style="--c:${i.c}" aria-hidden="true"><svg viewBox="0 0 24 24">${i.d}</svg></span>`; }
-const catIconKey = c => (c && ICONS[c.icon]) ? c.icon : guessIcon(c?.name||"");
+// icon "other" (…) được lưu khi chưa đoán ra hình: đoán lại theo tên, rồi theo nhóm cha
+const catIconKey = c => (c && ICONS[c.icon] && c.icon!=="other") ? c.icon : [c?.name,c?.parent].map(n=>guessIcon(n||"")).find(k=>k!=="other")||"other";
 const catColor = c => (ICONS[catIconKey(c)]||ICONS.other).c;
 const walletIconKey = w => (w && ICONS[w.icon]) ? w.icon : ({bank:"bank",card:"card",saving:"saving",ewallet:"ewallet"}[w?.type]||"cash");
 
@@ -1146,8 +1160,8 @@ function catsView(){
     <p class="small muted" style="margin:0">Chạm vào icon để đổi hình, sửa tên ngay trong ô.</p>
     ${unused.length?`<button class="btn ghost" id="cPurge">Xoá ${unused.length} hạng mục chưa dùng</button>`:""}
     <div class="list-plain">${groups.map(([g,kids])=>{ if(kids.length===1) return catRow(kids[0],false);
-      const open=!!S.catOpen?.[g]||kids.some(c=>c.id===S.pickFor||c.id===S.mergeCat), tot=kids.reduce((s,c)=>s+(cnt[c.id]||0),0), head=kids.find(c=>!c.parent)||kids[0];
-      return `<div><button class="cgroup" data-cgroup="${esc(g)}" aria-expanded="${open}">${icoHTML(catIconKey(head))}<span class="t">${esc(g)}<span class="small muted">${kids.length} mục · ${tot} khoản</span></span><span class="chev">${open?"▴":"▾"}</span></button>${open?`<div class="ckids">${kids.map(c=>catRow(c,true)).join("")}</div>`:""}</div>`; }).join("")}</div>
+      const open=!!S.catOpen?.[g]||kids.some(c=>c.id===S.pickFor||c.id===S.mergeCat), tot=kids.reduce((s,c)=>s+(cnt[c.id]||0),0), head=kids.find(c=>!c.parent)||kids[0], gIco=guessIcon(g)!=="other"?guessIcon(g):catIconKey(head);
+      return `<div><button class="cgroup" data-cgroup="${esc(g)}" aria-expanded="${open}">${icoHTML(gIco)}<span class="t">${esc(g)}<span class="small muted">${kids.length} mục · ${tot} khoản</span></span><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button>${open?`<div class="ckids">${kids.map(c=>catRow(c,true)).join("")}</div>`:""}</div>`; }).join("")}</div>
   </section>
   ${sugg.length?`<section class="card"><h2>Gợi ý gộp hạng mục trùng</h2><p class="small muted" style="margin:0">Các cặp tên gần giống nhau. Gộp hạng mục ít khoản vào hạng mục nhiều khoản; các khoản được chuyển sang, hạng mục cũ bị xoá.</p>
     <div class="list-plain">${sugg.map(([a,b])=>`<div class="menuitem" style="padding:8px 0"><div class="mid"><div style="font-weight:600">${esc(a.name)} <span class="muted small">(${cnt[a.id]||0})</span> → ${esc(b.parent?b.parent+" › "+b.name:b.name)} <span class="muted small">(${cnt[b.id]||0})</span></div></div><button class="chip" data-sugg="${esc(a.id)}|${esc(b.id)}">Gộp</button></div>`).join("")}</div></section>`:""}
