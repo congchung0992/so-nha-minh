@@ -241,6 +241,13 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .btn.danger{background:transparent;color:var(--expense);border:1px solid var(--expense)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btnrow{display:flex;gap:10px;flex-wrap:wrap}
+/* nút Lưu / Huỷ nổi bên phải, luôn bám màn hình khi cuộn form ghi chép */
+.fabside{position:fixed;top:50%;right:max(6px,calc((100vw - 560px) / 2 + 6px));transform:translateY(-50%);z-index:15;display:flex;flex-direction:column;gap:10px}
+#view.enter > .fabside{animation:none}
+.fabside button{width:42px;height:42px;border-radius:50%;border:0;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.28);padding:0}
+.fabside button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.fabside .ok{background:var(--accent);color:var(--accent-ink)} .fabside .no{background:var(--surface-2);color:var(--fg);border:1px solid var(--line)}
+.fabside button:disabled{opacity:.5}
 .btnrow .btn{flex:1}
 .err{color:var(--expense);font-size:13.5px}
 .err:empty{display:none}
@@ -891,6 +898,7 @@ function formView(){
   </section>`}
   <div class="err" id="fErr" role="alert"></div>
   <div class="btnrow">${editing?`<button class="btn ghost" id="fCancel">Huỷ</button>`:""}<button class="btn" id="fSave" ${ro?"disabled":""}>${editing?"Lưu thay đổi":"Lưu ghi chép"}</button></div>
+  <div class="fabside">${ro?"":`<button class="ok" id="fSaveFab" aria-label="${editing?"Lưu thay đổi":"Lưu ghi chép"}" title="Lưu"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>`}${editing?`<button class="no" id="fCancelFab" aria-label="Huỷ" title="Huỷ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:""}</div>
   ${editing && !ro ? (S.confirmDel ? `<div class="note row between" style="flex-wrap:wrap"><span>Xoá hẳn khoản này?</span><span class="row"><button class="chip" id="fDelNo">Không</button><button class="btn danger" id="fDelYes" style="min-height:38px;padding:8px 14px">Xoá</button></span></div>` : `<button class="btn danger" id="fDel">Xoá ghi chép</button>`) : ""}`;
   const amt = $("#fAmount");
   amt.addEventListener("input",()=>{ const n=parseAmount(amt.value); f.amount=n||""; amt.value=n?fmt(n):""; });
@@ -906,6 +914,9 @@ function formView(){
   $("#fDate").onchange=e=>f.date=e.target.value;
   $("#fNote").oninput=e=>f.note=e.target.value;
   const cancel=$("#fCancel"); if(cancel) cancel.onclick=()=>{ S.editId=null; S.form=null; setTab("book"); };
+  const cancelFab=$("#fCancelFab"); if(cancelFab) cancelFab.onclick=()=>cancel.click();
+  // lưu từ nút nổi: nếu báo lỗi thì cuộn tới chỗ báo lỗi cho thấy
+  const saveFab=$("#fSaveFab"); if(saveFab) saveFab.onclick=async()=>{ await saveForm(); const e=$("#fErr"); if(e&&e.textContent) e.scrollIntoView({block:"center",behavior:"smooth"}); };
   const del=$("#fDel"); if(del) del.onclick=()=>{S.confirmDel=true; formView();};
   const dn=$("#fDelNo"); if(dn) dn.onclick=()=>{S.confirmDel=false; formView();};
   const dy=$("#fDelYes"); if(dy) dy.onclick=async()=>{ dy.disabled=true; try{ await S.db.doc("tx/"+S.editId).delete(); toast("Đã xoá"); S.editId=null; S.form=null; setTab("book"); }catch(e){ handleWriteErr(e); dy.disabled=false; } };
@@ -921,11 +932,11 @@ async function saveForm(){
   if (f.kind==="transfer"){ if(!walletById(f.toWalletId)){err.textContent="Chọn ví nhận.";return;} if(f.toWalletId===f.walletId){err.textContent="Ví chuyển và ví nhận phải khác nhau.";return;} }
   else if (!catById(f.categoryId)) { err.textContent="Chọn một hạng mục."; window.scrollTo({top:200,behavior:"smooth"}); return; }
   const body = { kind:f.kind, amount, walletId:f.walletId, date:f.date, note:(f.note||"").trim(), categoryId: f.kind==="transfer"?"":f.categoryId, toWalletId: f.kind==="transfer"?f.toWalletId:"" };
-  const btn=$("#fSave"); btn.disabled=true; btn.textContent="Đang lưu…";
+  const btn=$("#fSave"), fab=$("#fSaveFab"); btn.disabled=true; btn.textContent="Đang lưu…"; if(fab) fab.disabled=true;
   try{
     if (S.editId){ const old=S.txs.find(t=>t.id===S.editId)||{}; await S.db.doc("tx/"+S.editId).set({...strip0(old), ...body, updatedAt:Date.now(), updatedBy:S.uid||""}); toast("Đã lưu thay đổi"); S.editId=null; S.form=null; setTab("book"); }
     else { await S.db.collection("tx").add({...body, by:S.uid||"", createdAt:Date.now()}); toast(`Đã ghi ${f.kind==="income"?"+":f.kind==="expense"?"−":""}${fmt(amount)} đ`); const k=f.kind, w=f.walletId; S.form=blankForm(); S.form.kind=k; S.form.walletId=w; S.month=ymOf(body.date); formView(); window.scrollTo(0,0); }
-  }catch(e){ handleWriteErr(e); btn.disabled=false; btn.textContent=S.editId?"Lưu thay đổi":"Lưu ghi chép"; }
+  }catch(e){ handleWriteErr(e); btn.disabled=false; btn.textContent=S.editId?"Lưu thay đổi":"Lưu ghi chép"; if(fab) fab.disabled=false; }
 }
 
 /* ---------- Báo cáo ---------- */
