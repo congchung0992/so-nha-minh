@@ -239,7 +239,8 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .vmic.on{background:var(--expense);color:#fff;animation:micpulse 1.2s ease-in-out infinite}
 @keyframes micpulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--expense) 55%,transparent)}50%{box-shadow:0 0 0 16px transparent}}
 .vprev{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:14px;padding:10px 12px}
-.vprev > div{display:flex;justify-content:space-between;gap:12px} .vprev span{color:var(--muted)} .vprev b{display:inline-flex;align-items:center;gap:6px;text-align:right;overflow-wrap:anywhere} .vprev i{color:var(--muted);font-weight:500}
+.vprev > div:not(.vcats){display:flex;justify-content:space-between;gap:12px}
+.vcats{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line);margin-top:2px} .vcats > span{color:var(--muted)} .vprev span{color:var(--muted)} .vprev b{display:inline-flex;align-items:center;gap:6px;text-align:right;overflow-wrap:anywhere} .vprev i{color:var(--muted);font-weight:500}
 .tpl{flex:none;display:flex;align-items:center;gap:8px;max-width:220px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--c) 8%,var(--surface));text-align:left;color:inherit}
 .tpl > span:not(.ico){display:flex;flex-direction:column;min-width:0;line-height:1.25} .tpl b{font-weight:600;overflow-wrap:anywhere}
 .ico.xs{width:22px;height:22px;border-radius:7px}
@@ -462,7 +463,7 @@ const NAME_HINTS = [
   [/hoan tien|tien hoan|diem thuong|cashback/,"cashback"],
   [/an sang|banh mi/,"breakfast"],[/sach vo|^sach\b|van phong pham/,"book"],[/my pham|son moi/,"lipstick"],[/thue nha|tien thue/,"key"],
   [/do dac|noi that|do dung nha/,"sofa"],[/thuoc/,"pill"],[/kham|benh vien|chua benh/,"stetho"],[/trang phuc/,"hanger"],[/quan ao/,"shirt"],
-  [/phi chuyen|phi the|phi ngan hang|phi dich vu/,"fee"],[/bieu tang|qua tang|qua cap/,"gift"],[/hoan tien|diem thuong|cashback/,"cashback"],[/li xi|mung tuoi/,"envelope"],
+  [/phi chuyen|phi the|phi ngan hang|phi dich vu/,"fee"],[/bieu tang|qua tang|qua cap|qua sinh nhat|sinh nhat|ky niem/,"gift"],[/hoan tien|diem thuong|cashback/,"cashback"],[/li xi|mung tuoi/,"envelope"],
   [/cho vay/,"lend"],[/lai vay/,"percent"],[/di vay|tra no|tra gop|khoan vay/,"loan"],[/ngan hang/,"bank"],[/^thue(?! nha)|le phi|^phi\b/,"receipt"],
   [/dich vu sinh hoat|sinh hoat|tien ich/,"bulb"],[/huong thu|tiec|nhau|\bbar\b/,"cocktail"],[/may mac/,"shirt"],
   [/phu kien|trang suc|dong ho/,"gem"],[/tien vao|nhan tien/,"inflow"],
@@ -1041,7 +1042,14 @@ function parseSpoken(text){
   const best = kind ? ranked.find(([id])=>catById(id).kind===kind) : ranked[0];
   if (!kind) kind = best ? catById(best[0]).kind : "expense";
   if (best && best[1]>=2) out.categoryId=best[0];
+  // "mua máy tính", "mua tivi"… không khớp hạng mục nào → hạng mục mua sắm hay dùng nhất
+  if (!out.categoryId && kind==="expense" && /\b(mua|sam|dat hang|order)\b|may tinh|laptop|tivi|tu lanh|may giat|dieu hoa|dien may|noi that|ban ghe/.test(ts)){
+    const use={}; S.txs.forEach(x=>{ if(x.categoryId) use[x.categoryId]=(use[x.categoryId]||0)+1; });
+    const shop=S.cats.filter(c=>c.kind==="expense"&&(/mua sam|do dac|do dung|noi that|dien may|gia dung/.test(strip(c.name))||["bag","sofa"].includes(catIconKey(c))))
+      .sort((p,q)=>(/do dac|noi that|dien may|gia dung/.test(strip(q.name))-/do dac|noi that|dien may|gia dung/.test(strip(p.name)))*(/may|tivi|tu lanh|dieu hoa|ban ghe|noi that|laptop/.test(ts)?1:0)||(use[q.id]||0)-(use[p.id]||0))[0];
+    if (shop) out.categoryId=shop.id; }
   out.kind=kind;
+  out.cands=ranked.filter(([id])=>catById(id).kind===kind).slice(0,4).map(([id])=>id);
   // ghi chú = phần còn lại của câu gốc (giữ dấu), bỏ động từ mở đầu
   let note=[...orig].filter((_,i)=>keep[i]).join("").replace(/\s+/g," ").replace(/^\s*(chi|mua|trả|tiêu|thu|nhận|nhận được)\s+/i,"").replace(/^[\s,.-]+|[\s,.-]+$/g,"");
   out.note = note ? note[0].toUpperCase()+note.slice(1) : "";
@@ -1060,16 +1068,21 @@ function voiceSheet(){
     <div class="btnrow"><button class="btn" id="vApply" disabled>Điền vào form</button></div></div>`;
   document.body.appendChild(box);
   const txt=$("#vText"), st=$("#vStatus"), prev=$("#vPrev"), ap=$("#vApply"), micb=$("#vMic");
-  let rec=null, parsed=null;
+  let rec=null, parsed=null, pickedCat=null, lastText="";
   const show=()=>{ const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
-    parsed=parseSpoken(v); const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
+    if (v!==lastText){ pickedCat=null; lastText=v; }
+    parsed=parseSpoken(v); const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
+    const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
     prev.hidden=false;
     prev.innerHTML=`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
       <div><span>Số tiền</span><b class="num">${parsed.amount?fmt(parsed.amount)+" đ":"<i>chưa nghe rõ</i>"}</b></div>
       ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"<i>chọn sau</i>"}</b></div>`}
       <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
-      ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}`; };
+      ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}
+      ${parsed.kind!=="transfer"?(()=>{ const ids=[...new Set([autoCat,...(parsed.cands||[]),...frequentCats(parsed.kind,8).map(x=>x.id),...S.cats.filter(x=>x.kind===parsed.kind).sort((p,q)=>(p.order||0)-(q.order||0)).map(x=>x.id)].filter(id=>id&&catById(id)))].slice(0,10);
+        return ids.length?`<div class="vcats"><span>${c?"Đổi hạng mục":"Chọn hạng mục"}</span><div class="quick">${ids.map(id=>{ const x=catById(id); return `<button class="chip fq" style="--c:${catColor(x)}" data-vc="${esc(id)}" aria-pressed="${id===parsed.categoryId}">${icoHTML(catIconKey(x),"xs")}${esc(x.name)}</button>`; }).join("")}</div></div>`:""; })():""}`;
+    prev.querySelectorAll("[data-vc]").forEach(b=>b.onclick=()=>{ pickedCat=b.dataset.vc; show(); }); };
   txt.oninput=show;
   const close=()=>{ try{rec&&rec.abort()}catch(e){} box.remove(); };
   $("#vClose").onclick=close; box.onclick=e=>{ if(e.target===box) close(); };
