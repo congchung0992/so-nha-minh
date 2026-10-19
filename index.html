@@ -1028,10 +1028,20 @@ function parseSpoken(text){
   if (m){ const now=new Date(), d=+m[1], mo=m[2]?+m[2]:now.getMonth()+1;
     if(d>=1&&d<=31&&mo>=1&&mo<=12){ const y=now.getFullYear(), ds=y+"-"+pad(mo)+"-"+pad(d); out.date = ds>todayStr()? (y-1)+"-"+pad(mo)+"-"+pad(d) : ds; mask(m.index,m.index+m[0].length); } }
   // "chia 3 tháng", "chia đều cho 6 tháng", "trong 3 tháng" → chia nhiều tháng
+  // "quý 4" / "quý bốn" / "quý IV" → 3 tháng của quý; "tháng 9 10 11", "từ tháng 9 đến tháng 11" → đúng các tháng đó
+  const startAt=mo=>{ const now=new Date(), cm=now.getMonth()+1; let y=now.getFullYear(); if(mo<cm-6) y++; else if(mo>cm+6) y--; return y+"-"+pad(mo)+"-"+pad(Math.min(now.getDate(),new Date(y,mo,0).getDate())); };
+  const QN={1:1,2:2,3:3,4:4,i:1,ii:2,iii:3,iv:4,mot:1,nhat:1,hai:2,ba:3,bon:4,tu:4};
+  if ((m=/\bquy\s*(iii|iv|ii|i|[1-4]|mot|nhat|hai|ba|bon|tu)\b(?:\s*(?:nam\s*)?(20\d\d))?/.exec(t)) && !out.split){
+    const q=QN[m[1]]; if(q){ out.split=3; out.date=startAt(3*q-2); if(m[2]) out.date=m[2]+out.date.slice(4); mask(m.index,m.index+m[0].length); } }
+  if (!out.split && (m=/\btu thang\s*(\d{1,2})\s*(?:den|toi|-)\s*(?:het\s*)?thang\s*(\d{1,2})\b/.exec(t))){
+    const a1=+m[1], a2=+m[2], n=(a2-a1+12)%12+1; if(a1>=1&&a1<=12&&a2>=1&&a2<=12&&n>=2&&n<=12){ out.split=n; out.date=startAt(a1); mask(m.index,m.index+m[0].length); } }
+  if (!out.split && (m=/\bthang\s*(\d{1,2})((?:\s*(?:,|va|-)?\s*(?:thang\s*)?\d{1,2}\b(?!\s*(?:nghin|ngan|k|trieu|tr|cu|ty)\b|[.,]\d))+)/.exec(t))){
+    const ms=[+m[1],...m[2].match(/\d{1,2}/g).map(Number)]; const ok=ms.every((x,i)=>x>=1&&x<=12&&(i===0||x===ms[i-1]%12+1));
+    if (ok && ms.length>=2){ out.split=ms.length; out.date=startAt(ms[0]); mask(m.index,m.index+m[0].length); } }
   // "chia 3 tháng", "gói 6 tháng", "trong ba tháng", "một năm" / "cả năm" (12), "nửa năm" (6), "một quý" (3), "hai năm" (24)
   const NW={mot:1,hai:2,ba:3,bon:4,tu:4,nam:5,sau:6,bay:7,tam:8,chin:9,muoi:10,"muoi mot":11,"muoi hai":12,"hai muoi bon":24};
   const PER=/\b(?:(?:chia(?: deu)?(?: cho| ra| lam)?|trong|cho|goi|tra truoc|dong)\s+)?(\d{1,2}|muoi hai|muoi mot|hai muoi bon|mot|hai|ba|bon|tu|nam|sau|bay|tam|chin|muoi|ca|nua)\s+(thang|nam|quy)\b/;
-  if ((m=PER.exec(t))){ const q=m[1], unit=m[2]; const k = q==="ca" ? 1 : q==="nua" ? .5 : /^\d+$/.test(q) ? +q : NW[q], n = k ? Math.round(k*(unit==="nam"?12:unit==="quy"?3:1)) : 0;
+  if (!out.split && (m=PER.exec(t))){ const q=m[1], unit=m[2]; const k = q==="ca" ? 1 : q==="nua" ? .5 : /^\d+$/.test(q) ? +q : NW[q], n = k ? Math.round(k*(unit==="nam"?12:unit==="quy"?3:1)) : 0;
     if (n){ if(n>=2&&n<=36){ out.split=n; mask(m.index,m.index+m[0].length); } } }
   // số tiền
   const a=parseAmountText(t); if(a){ out.amount=a.v; mask(a.s,a.e); }
