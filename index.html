@@ -287,8 +287,16 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .picker button[aria-pressed="true"]{border-color:var(--accent)}
 .picker .ico{width:38px;height:38px;border-radius:12px}
 .catedit{display:flex;align-items:center;gap:10px;padding:6px 0}
+.grip{flex:none;width:22px;height:40px;margin-right:-6px;display:grid;place-items:center;color:var(--muted);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.grip svg{width:18px;height:18px;fill:currentColor}
+.catedit.dragging{opacity:.35}
+.dragghost{position:fixed;left:0;top:0;z-index:50;pointer-events:none;background:var(--surface);border-radius:14px;padding:6px 10px;box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:.95}
+[data-drop].dropon{outline:2px dashed var(--accent);outline-offset:2px;border-radius:14px;background:var(--accent-soft)}
+.dropout{position:sticky;top:calc(10px + env(safe-area-inset-top,0px));z-index:5;background:var(--surface);border:2px dashed var(--line);border-radius:14px;padding:14px;text-align:center;color:var(--muted);font-weight:600}
+.dropout.dropon{color:var(--accent)}
 .cgroup{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px 8px 0;margin:4px 0;border:0;border-radius:14px;background:none;color:inherit;text-align:left;transition:background-color .15s}
-.cgroup[aria-expanded="true"]{background:var(--surface-2);padding-left:8px}
+.cgroup[aria-expanded="true"]{background:var(--surface-2)}
+.cgroup{padding-left:26px}   /* thẳng hàng icon với dòng hạng mục (có nút kéo ⠿ phía trước) */
 .cgroup .t{flex:1;min-width:0;display:flex;flex-direction:column;font-weight:700}
 .cgroup .t .small{font-weight:500}
 .cgroup .chev{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--surface-2);color:var(--muted);flex:none}
@@ -1176,16 +1184,17 @@ function catsView(){
   cs.forEach(c=>{ const g=groupOf(c); if(!gmap.has(g)) gmap.set(g,[]); gmap.get(g).push(c); });
   const groups=[...gmap.entries()].map(([g,l])=>[g,l.sort((a,b)=>(!!a.parent)-(!!b.parent)||(a.order||0)-(b.order||0))]);
   const catRow=(c,inGroup)=>{ const n=cnt[c.id]||0;
-      return `<div><div class="catedit"><button class="ib" data-pickfor="${esc(c.id)}" aria-label="Đổi icon">${icoHTML(catIconKey(c))}</button><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">${inGroup?(c.parent?"":`<span class="small muted">Mục chung</span>`):c.parent?`<span class="small muted">${esc(c.parent)} ›</span>`:""}<input class="input" data-rename="${esc(c.id)}" value="${esc(c.name)}" maxlength="40" aria-label="Tên hạng mục"></div><span class="small muted num" style="flex:none;min-width:38px;text-align:right">${n} khoản</span>${n?`<button class="chip" data-mergecat="${esc(c.id)}">Gộp</button>`:`<button class="chip" data-del="${esc(c.id)}">Xoá</button>`}</div>${S.pickFor===c.id?picker(catIconKey(c)):""}${S.mergeCat===c.id?`<div class="mergebox"><span class="small">Gộp ${n} khoản của “${esc(c.name)}” vào</span><div class="grid2"><select class="input" id="mcTo">${cs.filter(x=>x.id!==c.id).sort((a,b)=>(cnt[b.id]||0)-(cnt[a.id]||0)).map(x=>`<option value="${esc(x.id)}">${esc(x.parent?x.parent+" › "+x.name:x.name)} (${cnt[x.id]||0})</option>`).join("")}</select><button class="btn ghost" id="mcGo">Gộp</button></div></div>`:""}</div>`; };
+      return `<div><div class="catedit" data-drop="${inGroup||c.parent?"g:"+esc(groupOf(c)):"c:"+esc(c.id)}"><span class="grip" data-drag="${esc(c.id)}" title="Giữ để kéo sang nhóm khác" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg></span><button class="ib" data-pickfor="${esc(c.id)}" aria-label="Đổi icon">${icoHTML(catIconKey(c))}</button><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">${inGroup?(c.parent?"":`<span class="small muted">Mục chung</span>`):c.parent?`<span class="small muted">${esc(c.parent)} ›</span>`:""}<input class="input" data-rename="${esc(c.id)}" value="${esc(c.name)}" maxlength="40" aria-label="Tên hạng mục"></div><span class="small muted num" style="flex:none;min-width:38px;text-align:right">${n} khoản</span>${n?`<button class="chip" data-mergecat="${esc(c.id)}">Gộp</button>`:`<button class="chip" data-del="${esc(c.id)}">Xoá</button>`}</div>${S.pickFor===c.id?picker(catIconKey(c)):""}${S.mergeCat===c.id?`<div class="mergebox"><span class="small">Gộp ${n} khoản của “${esc(c.name)}” vào</span><div class="grid2"><select class="input" id="mcTo">${cs.filter(x=>x.id!==c.id).sort((a,b)=>(cnt[b.id]||0)-(cnt[a.id]||0)).map(x=>`<option value="${esc(x.id)}">${esc(x.parent?x.parent+" › "+x.name:x.name)} (${cnt[x.id]||0})</option>`).join("")}</select><button class="btn ghost" id="mcGo">Gộp</button></div></div>`:""}</div>`; };
   $("#view").innerHTML = `${backBtn()}
   <section class="card">
     <h2>Hạng mục</h2>
     <div class="seg plain" style="grid-template-columns:1fr 1fr"><button data-k="expense" aria-pressed="${k==="expense"}">Chi tiền</button><button data-k="income" aria-pressed="${k==="income"}">Thu tiền</button></div>
-    <p class="small muted" style="margin:0">Chạm vào icon để đổi hình, sửa tên ngay trong ô.</p>
+    <p class="small muted" style="margin:0">Chạm vào icon để đổi hình, sửa tên ngay trong ô. Giữ nút ⠿ rồi kéo hạng mục thả vào nhóm khác (hoặc thả lên một hạng mục để gom thành nhóm).</p>
+    <div class="dropout" data-drop="out" hidden>Thả vào đây để tách khỏi nhóm</div>
     ${unused.length?`<button class="btn ghost" id="cPurge">Xoá ${unused.length} hạng mục chưa dùng</button>`:""}
     <div class="list-plain">${groups.map(([g,kids])=>{ if(kids.length===1) return catRow(kids[0],false);
       const open=!!S.catOpen?.[g]||kids.some(c=>c.id===S.pickFor||c.id===S.mergeCat), tot=kids.reduce((s,c)=>s+(cnt[c.id]||0),0), head=kids.find(c=>!c.parent)||kids[0], gIco=guessIcon(g)!=="other"?guessIcon(g):catIconKey(head);
-      return `<div><button class="cgroup" data-cgroup="${esc(g)}" aria-expanded="${open}">${icoHTML(gIco)}<span class="t">${esc(g)}<span class="small muted">${kids.length} mục · ${tot} khoản</span></span><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button>${open?`<div class="ckids">${kids.map(c=>catRow(c,true)).join("")}</div>`:""}</div>`; }).join("")}</div>
+      return `<div><button class="cgroup" data-cgroup="${esc(g)}" data-drop="g:${esc(g)}" aria-expanded="${open}">${icoHTML(gIco)}<span class="t">${esc(g)}<span class="small muted">${kids.length} mục · ${tot} khoản</span></span><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button>${open?`<div class="ckids">${kids.map(c=>catRow(c,true)).join("")}</div>`:""}</div>`; }).join("")}</div>
   </section>
   ${sugg.length?`<section class="card"><h2>Gợi ý gộp hạng mục trùng</h2><p class="small muted" style="margin:0">Các cặp tên gần giống nhau. Gộp hạng mục ít khoản vào hạng mục nhiều khoản; các khoản được chuyển sang, hạng mục cũ bị xoá.</p>
     <div class="list-plain">${sugg.map(([a,b])=>`<div class="menuitem" style="padding:8px 0"><div class="mid"><div style="font-weight:600">${esc(a.name)} <span class="muted small">(${cnt[a.id]||0})</span> → ${esc(b.parent?b.parent+" › "+b.name:b.name)} <span class="muted small">(${cnt[b.id]||0})</span></div></div><button class="chip" data-sugg="${esc(a.id)}|${esc(b.id)}">Gộp</button></div>`).join("")}</div></section>`:""}
@@ -1196,6 +1205,7 @@ function catsView(){
   </section>`;
   bindBack();
   document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{S.catKind=b.dataset.k; S.pickFor=null; catsView();});
+  bindCatDrag();
   document.querySelectorAll("[data-cgroup]").forEach(b=>b.onclick=()=>{ const g=b.dataset.cgroup; S.catOpen={...S.catOpen,[g]:!S.catOpen?.[g]}; if(!S.catOpen[g]){ S.pickFor=null; S.mergeCat=null; } catsView(); });
   document.querySelectorAll("[data-pickfor]").forEach(b=>b.onclick=()=>{ S.pickFor = S.pickFor===b.dataset.pickfor?null:b.dataset.pickfor; catsView(); });
   document.querySelectorAll("[data-pick]").forEach(b=>b.onclick=async()=>{ const key=b.dataset.pick;
@@ -1217,6 +1227,46 @@ function catsView(){
   document.querySelectorAll("[data-sugg]").forEach(b=>b.onclick=async()=>{ const [a,c]=b.dataset.sugg.split("|"); const src=catById(a), dst=catById(c); if(!src||!dst) return;
     if(!b.dataset.armed){ b.dataset.armed="1"; b.textContent="Bấm lần nữa"; return; }
     b.disabled=true; await mergeCategory(src,dst); });
+}
+/* kéo thả hạng mục giữa các nhóm: giữ nút ⠿ rồi kéo; thả lên dòng nhóm / mục trong nhóm → vào nhóm đó,
+   thả lên một hạng mục đứng riêng → gom thành nhóm mang tên mục đó, thả vào ô "tách khỏi nhóm" → đứng riêng */
+function bindCatDrag(){
+  document.querySelectorAll("[data-drag]").forEach(h=>h.onpointerdown=e=>{
+    if (e.button>0 || S.canWrite===false) return;
+    e.preventDefault();
+    const c=catById(h.dataset.drag); if(!c) return;
+    const row=h.closest(".catedit"), r=row.getBoundingClientRect();
+    const ghost=row.cloneNode(true); ghost.classList.add("dragghost"); ghost.style.width=r.width+"px"; document.body.appendChild(ghost);
+    const dx=e.clientX-r.left, dy=e.clientY-r.top;
+    row.classList.add("dragging");
+    const out=$(".dropout"); if(out) out.hidden=!c.parent;
+    let target=null, lastY=e.clientY, raf=0;
+    const place=(x,y)=>{ ghost.style.transform=`translate(${x-dx}px,${y-dy}px)`; };
+    place(e.clientX,e.clientY);
+    const pick=(x,y)=>{ const el=document.elementFromPoint(x,y)?.closest("[data-drop]");
+      const t = el && el!==row ? el : null;
+      if (t!==target){ target?.classList.remove("dropon"); target=t; target?.classList.add("dropon"); } };
+    // tự cuộn khi kéo sát mép trên / dưới màn hình
+    const scroll=()=>{ const H=innerHeight, edge=90; const v = lastY<edge ? -(edge-lastY)/6 : lastY>H-edge-70 ? (lastY-(H-edge-70))/6 : 0;
+      if (v){ window.scrollBy(0,v); } raf=requestAnimationFrame(scroll); };
+    raf=requestAnimationFrame(scroll);
+    const move=ev=>{ lastY=ev.clientY; place(ev.clientX,ev.clientY); pick(ev.clientX,ev.clientY); };
+    const end=async ev=>{
+      removeEventListener("pointermove",move); removeEventListener("pointerup",end); removeEventListener("pointercancel",end);
+      cancelAnimationFrame(raf); ghost.remove(); row.classList.remove("dragging"); target?.classList.remove("dropon"); if(out) out.hidden=true;
+      if (ev.type!=="pointerup" || !target) return;
+      const d=target.dataset.drop; let parent;
+      if (d==="out") parent="";
+      else if (d.startsWith("g:")) parent=d.slice(2);
+      else { const t=catById(d.slice(2)); if(!t) return; parent=t.name; }
+      if (parent===c.name) parent="";                         // thả về nhóm mang tên chính nó = mục chung của nhóm đó
+      if ((c.parent||"")===parent) return;
+      if (S.cats.some(x=>x.kind===c.kind && x.id!==c.id && x.parent===c.name)){ toast(`“${c.name}” đang là nhóm có hạng mục con, chuyển các mục con đi trước`); return; }
+      try{ await S.db.doc("categories/"+c.id).set({...strip0(c),parent,icon:catIconKey(c)}); S.catOpen={...S.catOpen,[parent||c.name]:true};
+        toast(parent?`Đã chuyển “${c.name}” vào nhóm ${parent}`:`Đã tách “${c.name}” khỏi nhóm`); }catch(err){ handleWriteErr(err); }
+      catsView(); };
+    addEventListener("pointermove",move); addEventListener("pointerup",end); addEventListener("pointercancel",end);
+  });
 }
 /* gộp hạng mục: chuyển mọi khoản sang hạng mục đích rồi xoá hạng mục cũ */
 async function mergeCategory(src, dst){
