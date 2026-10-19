@@ -243,13 +243,16 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .vneed.shake{animation:vshake .4s}
 @keyframes vshake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 .vprev .miss span,.vprev .miss b{color:var(--expense)}
+.vprev > .vsplit{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:8px;margin-top:2px}
+.vsplit .row b{color:var(--muted);font-weight:600}
+.vsr{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:baseline} .vsr span:first-child{color:var(--fg)} .vsr b{min-width:110px;text-align:right}
 .vamt{width:150px;text-align:right;border:1px solid var(--expense);border-radius:10px;padding:4px 8px;background:var(--surface);font-weight:700}
 .vmic{flex:none;align-self:center;width:76px;height:76px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .vmic svg{width:34px;height:34px}
 .vmic.on{background:var(--expense);color:#fff;animation:micpulse 1.2s ease-in-out infinite}
 @keyframes micpulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--expense) 55%,transparent)}50%{box-shadow:0 0 0 16px transparent}}
 .vprev{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:14px;padding:10px 12px}
-.vprev > div:not(.vcats){display:flex;justify-content:space-between;gap:12px}
+.vprev > div:not(.vcats):not(.vsplit){display:flex;justify-content:space-between;gap:12px}
 .vcats{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line);margin-top:2px} .vcats > span{color:var(--muted)} .vprev span{color:var(--muted)} .vprev b{display:inline-flex;align-items:center;gap:6px;text-align:right;overflow-wrap:anywhere} .vprev i{color:var(--muted);font-weight:500}
 .tpl{flex:none;display:flex;align-items:center;gap:8px;max-width:220px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--c) 8%,var(--surface));text-align:left;color:inherit}
 .tpl > span:not(.ico){display:flex;flex-direction:column;min-width:0;line-height:1.25} .tpl b{font-weight:600;overflow-wrap:anywhere}
@@ -1117,12 +1120,13 @@ function voiceSheet(){
     const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
     prev.hidden=false;
     prev.innerHTML=`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
-      <div class="${parsed.amount?"":"miss"}"><span>Số tiền</span>${parsed.amount&&!typedAmt?`<b class="num">${fmt(parsed.amount)} đ</b>`:`<input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${typedAmt?fmt(typedAmt):""}" aria-label="Số tiền">`}</div>
+      <div class="${parsed.amount?"":"miss"}"><span>${parsed.split>1&&parsed.kind!=="transfer"?"Tổng tiền":"Số tiền"}</span>${parsed.amount&&!typedAmt?`<b class="num">${fmt(parsed.amount)} đ</b>`:`<input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${typedAmt?fmt(typedAmt):""}" aria-label="Số tiền">`}</div>
       ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div class="${c?"":"miss"}"><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"Bắt buộc chọn ↓"}</b></div>`}
       <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
       ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}
-      ${parsed.split>1&&parsed.kind!=="transfer"?`<div><span>Chia</span><b>${parsed.split} tháng: ${splitParts(parsed.amount||0,parsed.date,parsed.split,"").map(x=>"T"+Number(x.date.slice(5,7))).join(", ")}</b></div>`:""}
+      ${parsed.split>1&&parsed.kind!=="transfer"?`<div class="vsplit"><div class="row between"><span>Chia ${parsed.split} tháng</span><b class="num">${parsed.amount?"mỗi tháng ~"+fmt(Math.floor(parsed.amount/parsed.split/1000)*1000)+" đ":""}</b></div>
+        ${splitParts(parsed.amount||0,parsed.date,parsed.split,"").map((x,i)=>`<div class="vsr"><span>${i+1}. T${Number(x.date.slice(5,7))}/${x.date.slice(0,4)}</span><span class="muted">ngày ${viDate(x.date).slice(0,5)}</span><b class="num">${parsed.amount?fmt(x.amount)+" đ":"–"}</b></div>`).join("")}</div>`:""}
 `;
     const va=$("#vAmt"); if(va){ va.oninput=()=>{ const n=parseAmount(va.value); typedAmt=n; va.value=n?fmt(n):""; parsed.amount=n||undefined; va.closest(".miss,div")?.classList.toggle("miss",!n); checkNeed(); }; }
     renderCats(parsed.kind, autoCat, parsed.cands||[]); checkNeed(); };
