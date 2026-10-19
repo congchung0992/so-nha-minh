@@ -1006,7 +1006,10 @@ function moreView(){
   if (sub==="import") return importView();
   if (sub==="password") return passwordView(false);
   const mi=(go,key,t,s)=>`<button class="menuitem" ${go}>${icoHTML(key)}<div class="mid"><div style="font-weight:600">${t}</div><div class="s">${s}</div></div><span class="chev">›</span></button>`;
+  const me=S.members.find(m=>m.user_id===S.uid);
   $("#view").innerHTML = `
+  <section class="card"><div class="row">${icoHTML("family","lg")}<div style="min-width:0;flex:1"><h2>${esc(me?.display_name||"Tài khoản")}</h2><div class="small muted" style="overflow:hidden;text-overflow:ellipsis">${esc(S.email||"")}</div></div></div>
+    <div class="btnrow"><button class="btn ghost" id="chPass">Đổi mật khẩu</button><button class="btn danger" id="signOut2">Đăng xuất</button></div></section>
   <section class="card" style="gap:0"><h2 style="margin-bottom:6px">Thiết lập sổ</h2>
     ${mi('data-go="wallets"',"bank","Ví và tài khoản",`${S.wallets.length} ví · số dư ban đầu, đổi tên`)}
     ${mi('data-go="cats"',"market","Hạng mục và icon",`${S.cats.length} hạng mục · đổi icon, thêm mới`)}</section>
@@ -1028,8 +1031,6 @@ function householdCard(){
     </div>
     <div class="list-plain">${S.members.map(m=>`<div class="menuitem" style="padding:8px 0">${icoHTML(m.role==="owner"?"star":"family","sm")}<div class="mid"><div style="font-weight:600">${esc(m.display_name||"Người nhà")}${m.user_id===S.uid?" (bạn)":""}</div><div class="s">${m.role==="owner"?"Chủ sổ":"Thành viên"}</div></div></div>`).join("")}</div>
     <div class="field"><label for="myName">Tên hiển thị của bạn</label><input class="input" id="myName" maxlength="30" value="${esc(me?.display_name||"")}"></div>
-    <button class="btn ghost" id="chPass">Đổi mật khẩu</button>
-    <button class="btn ghost" id="signOut2">Đăng xuất (${esc(S.email)})</button>
   </section>`;
 }
 function bindHouseholdCard(){
@@ -1038,7 +1039,7 @@ function bindHouseholdCard(){
   const rc=$("#rotCode"); if(rc) rc.onclick=async()=>{ if(!rc.dataset.armed){ rc.dataset.armed="1"; rc.textContent="Bấm lần nữa để đổi"; return; } const {data,error}=await S.sb.rpc("rotate_join_code",{p_household:S.hid}); if(error){ toast("Chưa đổi được mã."); return; } S.household={...h,join_code:data}; toast("Đã đổi mã mời, mã cũ hết hiệu lực"); render(); };
   const mn=$("#myName"); if(mn) mn.onchange=async()=>{ const v=mn.value.trim(); if(!v) return; const {error}=await S.sb.from("members").update({display_name:v}).eq("household_id",S.hid).eq("user_id",S.uid); if(error){ toast("Chưa lưu được tên."); return; } toast("Đã đổi tên"); loadMembers(); };
   $("#chPass").onclick=()=>{ S.moreSub="password"; S.backTo=null; render(); window.scrollTo(0,0); };
-  $("#signOut2").onclick=signOut;
+  const so=$("#signOut2"); so.onclick=()=>{ if(!so.dataset.armed){ so.dataset.armed="1"; so.textContent="Bấm lần nữa để đăng xuất"; setTimeout(()=>{ if(so.isConnected){ delete so.dataset.armed; so.textContent="Đăng xuất"; } },4000); return; } signOut(); };
 }
 function backBtn(){ return `<div><button class="chip" id="back">‹ ${S.backTo==="add"?"Quay lại ghi chép":"Cài đặt"}</button></div>`; }
 function bindBack(){ $("#back").onclick=()=>{ S.pickFor=null; if(S.backTo==="add"){ S.backTo=null; S.tab="add"; markTab("add"); S.moreSub="menu"; render(); return; } S.moreSub="menu"; render(); }; }
