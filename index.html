@@ -38,7 +38,7 @@ body{margin:0} img{max-width:100%} [hidden]{display:none!important}
   --accent:#4cc3bd; --accent-ink:#06211f; --accent-soft:#163a3b;
   --income:#3fd08f; --expense:#ff8169; --transfer:#9aa6ff;
   --warn-bg:#3a2f17; --warn-fg:#f2cf86;
-  --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}}
+  --shadow:0 0 0 1px rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.3); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0e1419; --surface:#172028; --surface-2:#1e2932; --line:#2a3640;
   --fg:#e7edf2; --muted:#93a1ad;
@@ -46,7 +46,7 @@ body{margin:0} img{max-width:100%} [hidden]{display:none!important}
   --accent:#4cc3bd; --accent-ink:#06211f; --accent-soft:#163a3b;
   --income:#3fd08f; --expense:#ff8169; --transfer:#9aa6ff;
   --warn-bg:#3a2f17; --warn-fg:#f2cf86;
-  --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}
+  --shadow:0 0 0 1px rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.3); color-scheme:dark}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{background:var(--bg);color:var(--fg);font-family:var(--f);font-size:var(--fs-md);line-height:1.45;-webkit-tap-highlight-color:transparent}
@@ -61,6 +61,9 @@ button{cursor:pointer}
 .band{background:linear-gradient(160deg,var(--brand) 0%,var(--brand-2) 100%);color:var(--brand-ink);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 64px;position:relative;overflow:hidden}
 .band::after{content:"";position:absolute;right:-60px;top:-80px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.16),rgba(255,255,255,0) 70%);pointer-events:none}
 .band .in{max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative}
+.band .hello{display:flex;align-items:center;gap:10px;min-width:0}
+.band #meAva .ico{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.92);box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.band #meAva .ico img{width:78%;height:78%}
 .band h1{margin:0;font-size:var(--fs-lg);font-weight:800;letter-spacing:-.01em}
 .band .sub{font-size:var(--fs-md);opacity:.8}
 .wrap{max-width:560px;margin:-50px auto 0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 120px;display:flex;flex-direction:column;gap:14px;position:relative}
@@ -191,12 +194,16 @@ h2{font-weight:700;font-size:var(--fs-lg);margin:0;text-wrap:balance}
 .chev{color:var(--muted);font-size:20px}
 
 /* Tab bar */
-nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);z-index:5}
+nav.tabs{position:fixed;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));max-width:540px;margin:0 auto;background:color-mix(in srgb,var(--surface) 82%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);border-radius:26px;box-shadow:0 10px 30px rgba(16,32,48,.16);padding-bottom:0;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);z-index:5}
 nav.tabs .in-tabs{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);align-items:end}
-nav.tabs button{background:none;border:0;padding:8px 2px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:var(--fs-md);color:var(--muted);font-weight:600;white-space:nowrap;letter-spacing:-.01em}
+@media (max-width:380px){ nav.tabs{left:6px;right:6px} nav.tabs button{font-size:min(var(--fs-md),3.9vw)!important;letter-spacing:-.02em!important} }
+nav.tabs button{background:none;border:0;padding:7px 2px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:var(--fs-md);color:var(--muted);font-weight:600;white-space:nowrap;letter-spacing:-.01em}
 nav.tabs button svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 nav.tabs button[aria-current="page"]{color:var(--accent)}
-nav.tabs .add{transform:translateY(-16px)}
+nav.tabs .add{transform:none}
+nav.tabs .add span.plus{margin-top:-30px}
+nav.tabs button:not(.add) svg{padding:3px clamp(8px,3vw,14px);box-sizing:content-box;border-radius:999px;transition:background-color .2s}
+nav.tabs button[aria-current="page"]:not(.add) svg{background:var(--accent-soft)}
 nav.tabs .add span.plus{width:56px;height:56px;border-radius:50%;background:linear-gradient(160deg,var(--brand),var(--brand-2));color:#fff;display:grid;place-items:center;box-shadow:0 6px 18px rgba(15,107,120,.35);border:4px solid var(--surface)}
 nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 
@@ -377,7 +384,7 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 @media (hover:hover){.btn:hover:not(:disabled){box-shadow:0 6px 18px rgba(15,107,120,.28)} .tx:hover,.menuitem:hover{opacity:.82} .wcard:hover{transform:translateY(-2px)}}
 /* thanh tab: icon đang chọn nhô lên, nút + xoay khi bấm */
 nav.tabs button svg{transition:transform .3s var(--ease-spring)}
-nav.tabs button[aria-current="page"]:not(.add) svg{transform:translateY(-2px) scale(1.1)}
+nav.tabs button[aria-current="page"]:not(.add) svg{transform:scale(1.04)}
 nav.tabs .add span.plus{transition:transform .3s var(--ease-spring),box-shadow .3s}
 nav.tabs .add:active span.plus{transform:scale(.9) rotate(90deg)}
 nav.tabs .add[aria-current="page"] span.plus{box-shadow:0 8px 24px rgba(15,107,120,.45)}
@@ -387,7 +394,7 @@ nav.tabs .add[aria-current="page"] span.plus{box-shadow:0 8px 24px rgba(15,107,1
 </head>
 <body>
 
-<div class="band"><div class="in"><div><h1>Sổ Nhà Mình</h1><div class="sub" id="who">Sổ thu chi của cả nhà</div></div><div class="sub" id="today"></div></div></div>
+<div class="band"><div class="in"><div class="hello"><span id="meAva" hidden></span><div><h1>Sổ Nhà Mình</h1><div class="sub" id="who">Sổ thu chi của cả nhà</div></div></div><div class="sub" id="today"></div></div></div>
 <div class="wrap" id="app">
   <div id="view" style="display:flex;flex-direction:column;gap:14px"><div class="card empty"><b>Đang mở sổ…</b><span>Sổ thu chi chung của cả nhà sẽ hiện ở đây.</span></div></div>
 </div>
@@ -465,6 +472,9 @@ const ICONS = {
   husband:{c:"#4a7bd8",d:'<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>'},
   person:{c:"#e0a030",d:'<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>'},
   household:{c:"#2fa58f",d:'<path d="M3 11l9-7.5 9 7.5"/><path d="M5.5 9.5V20h13V9.5"/>'},
+  purse:{c:"#d65db1",d:'<path d="M5 9h14l-1.5 11h-11z"/><path d="M9 9a3 3 0 0 1 6 0"/>'},
+  tags:{c:"#5b6be0",d:'<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 5V3M12 5V3M16 5V3"/>'},
+  outbox:{c:"#2b8fe0",d:'<path d="M12 14V3M7.5 7.5L12 3l4.5 4.5"/><path d="M3.5 14v4.5a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V14"/>'},
   inflow:{c:"#16a06a",d:'<path d="M12 3v11M7.5 9.5L12 14l4.5-4.5"/><path d="M3.5 14v4.5a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V14"/>'},
   cash:{c:"#16a06a",d:'<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.8"/><path d="M6 12h.01M18 12h.01"/>'},
   bank:{c:"#2f6bd0",d:'<path d="M3 9.5L12 4l9 5.5M5 10v7.5M9.5 10v7.5M14.5 10v7.5M19 10v7.5M3 20h18"/>'},
@@ -500,7 +510,7 @@ const NAME_HINTS = [
 ];
 function guessIcon(name){ const s=strip(name); for(const [re,k] of NAME_HINTS) if(re.test(s)) return k; return "other"; }
 // hạng mục & ví dùng icon màu trong icons/ (Fluent Emoji, MIT); calendar / pen giữ icon nét vì là nút giao diện
-const EMOJI_ICONS = new Set(["baby", "bag", "bank", "beauty", "bike", "bolt", "book", "breakfast", "bulb", "bus", "car", "card", "cash", "cashback", "cocktail", "coffee", "coins", "drop", "envelope", "ewallet", "family", "fee", "food", "fuel", "gas", "gem", "gift", "handshake", "hanger", "health", "home", "household", "husband", "inflow", "key", "kids", "lend", "lipstick", "loan", "market", "other", "percent", "person", "pet", "phone", "piggy", "pill", "plane", "receipt", "salary", "saving", "school", "shield", "shirt", "sofa", "sport", "star", "stetho", "store", "ticket", "tools", "transfer", "tv", "wife", "wifi"]);
+const EMOJI_ICONS = new Set(["baby", "bag", "bank", "beauty", "bike", "bolt", "book", "breakfast", "bulb", "bus", "car", "card", "cash", "cashback", "cocktail", "coffee", "coins", "drop", "envelope", "ewallet", "family", "fee", "food", "fuel", "gas", "gem", "gift", "handshake", "hanger", "health", "home", "household", "husband", "inflow", "key", "kids", "lend", "lipstick", "loan", "market", "other", "outbox", "percent", "person", "pet", "phone", "piggy", "pill", "plane", "purse", "receipt", "salary", "saving", "school", "shield", "shirt", "sofa", "sport", "star", "stetho", "store", "tags", "ticket", "tools", "transfer", "tv", "wife", "wifi"]);
 function icoHTML(key, cls=""){ const k=ICONS[key]?key:"other", i=ICONS[k];
   if (EMOJI_ICONS.has(k)) return `<span class="ico emo ${cls}" style="--c:${i.c}" aria-hidden="true"><img src="icons/${k}.svg" alt="" decoding="async" draggable="false"></span>`;
   return `<span class="ico ${cls}" style="--c:${i.c}" aria-hidden="true"><svg viewBox="0 0 24 24">${i.d}</svg></span>`; }
@@ -1395,11 +1405,11 @@ function moreView(){
   <section class="card"><div class="row">${icoHTML(personIcon(me?.display_name),"lg")}<div style="min-width:0;flex:1"><h2>${esc(me?.display_name||"Tài khoản")}</h2><div class="small muted" style="overflow:hidden;text-overflow:ellipsis">${esc(S.email||"")}</div></div></div>
     <div class="btnrow"><button class="btn ghost" id="chPass">Đổi mật khẩu</button><button class="btn danger" id="signOut2">Đăng xuất</button></div></section>
   <section class="card" style="gap:0"><h2 style="margin-bottom:6px">Thiết lập sổ</h2>
-    ${mi('data-go="wallets"',"bank","Ví và tài khoản",`${S.wallets.length} ví · số dư ban đầu, đổi tên`)}
-    ${mi('data-go="cats"',"market","Hạng mục và icon",`${S.cats.length} hạng mục · đổi icon, thêm mới`)}</section>
+    ${mi('data-go="wallets"',"purse","Ví và tài khoản",`${S.wallets.length} ví · số dư ban đầu, đổi tên`)}
+    ${mi('data-go="cats"',"tags","Hạng mục và icon",`${S.cats.length} hạng mục · đổi icon, thêm mới`)}</section>
   <section class="card" style="gap:0"><h2 style="margin-bottom:6px">Dữ liệu</h2>
-    ${mi('data-go="import"',"bank","Nhập từ Excel","File Sổ Thu Chi, sao kê Techcombank")}
-    ${mi('id="doExport"',"coins","Xuất ra Excel",`Bảng kê thu chi · ${S.txs.length} ghi chép, mỗi ví một trang`)}</section>
+    ${mi('data-go="import"',"inflow","Nhập từ Excel","File Sổ Thu Chi, sao kê Techcombank")}
+    ${mi('id="doExport"',"outbox","Xuất ra Excel",`Bảng kê thu chi · ${S.txs.length} ghi chép, mỗi ví một trang`)}</section>
   ${householdCard()}`;
   document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ S.moreSub=b.dataset.go; S.backTo=null; render(); window.scrollTo(0,0); });
   $("#doExport").onclick=exportExcel;
@@ -2044,7 +2054,7 @@ function importView(){
   if (st && st.tcb) return tcbView();
   if (st && st.stc) return stcView();
   if (!st){
-    body = `<section class="card"><div class="row">${icoHTML("bank","lg")}<div><h2>Nhập từ Excel</h2><p class="small muted" style="margin:4px 0 0">File của app Sổ Thu Chi, sao kê Techcombank</p></div></div>
+    body = `<section class="card"><div class="row">${icoHTML("inflow","lg")}<div><h2>Nhập từ Excel</h2><p class="small muted" style="margin:4px 0 0">File của app Sổ Thu Chi, sao kê Techcombank</p></div></div>
       <div class="list-plain small">
         <div class="menuitem" style="padding:8px 0">${icoHTML("coins","sm")}<div class="mid"><b>Chuyển từ app Sổ Thu Chi:</b> trong app đó xuất <b>Bảng kê thu chi</b> ra Excel rồi chọn file ở dưới. Mỗi trang tính thành một ví, giữ nguyên hạng mục cha/con, giờ ghi và các lần chuyển giữa ví.</div></div>
         <div class="menuitem" style="padding:8px 0">${icoHTML("ewallet","sm")}<div class="mid">Trong ứng dụng hoặc Internet Banking của Techcombank, xuất sao kê tài khoản dạng <b>Excel (.xlsx)</b> cho khoảng ngày bạn cần.</div></div>
@@ -2388,6 +2398,7 @@ async function openHousehold(hid){
   S.db=makeDb(S.sb,hid);
   await loadMembers();
   const me=S.members.find(m=>m.user_id===S.uid); $("#who").textContent = me?.display_name ? "Xin chào, "+me.display_name : h.name;
+  const av=$("#meAva"); if(av){ av.innerHTML=icoHTML(personIcon(me?.display_name)); av.hidden=false; }
   const snap=(path,key,flag)=> S.db.collection(path).onSnapshot(s=>{ S[key]=s.docs.map(d=>({id:d.id,...d.data()})); S.ready[flag]=true; if(!isTyping()) render(); }, e=>{ S.ready[flag]=true; toast("Không tải được dữ liệu. Kiểm tra mạng."); render(); });
   snap("wallets","wallets","w"); snap("categories","cats","c"); snap("tx","txs","t");
   document.querySelector("nav.tabs").hidden=false;
