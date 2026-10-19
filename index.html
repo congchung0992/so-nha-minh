@@ -1038,11 +1038,14 @@ function parseSpoken(text){
   if (!out.split && (m=/\bthang\s*(\d{1,2})((?:\s*(?:,|va|-)?\s*(?:thang\s*)?\d{1,2}\b(?!\s*(?:nghin|ngan|k|trieu|tr|cu|ty)\b|[.,]\d))+)/.exec(t))){
     const ms=[+m[1],...m[2].match(/\d{1,2}/g).map(Number)]; const ok=ms.every((x,i)=>x>=1&&x<=12&&(i===0||x===ms[i-1]%12+1));
     if (ok && ms.length>=2){ out.split=ms.length; out.date=startAt(ms[0]); mask(m.index,m.index+m[0].length); } }
+  // "3 tháng từ tháng 11", "bắt đầu tháng 11" → chia bắt đầu từ tháng đó (không nói thì tính từ hôm nay)
+  let fromM=null; if ((m=/\b(?:tu|bat dau(?: tu)?)\s*thang\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr|cu|ty)\b)/.exec(t)) && +m[1]>=1 && +m[1]<=12 && !/\b(?:den|toi)\s*thang/.test(t)){ fromM=+m[1]; mask(m.index,m.index+m[0].length); }
   // "chia 3 tháng", "gói 6 tháng", "trong ba tháng", "một năm" / "cả năm" (12), "nửa năm" (6), "một quý" (3), "hai năm" (24)
   const NW={mot:1,hai:2,ba:3,bon:4,tu:4,nam:5,sau:6,bay:7,tam:8,chin:9,muoi:10,"muoi mot":11,"muoi hai":12,"hai muoi bon":24};
   const PER=/\b(?:(?:chia(?: deu)?(?: cho| ra| lam)?|trong|cho|goi|tra truoc|dong)\s+)?(\d{1,2}|muoi hai|muoi mot|hai muoi bon|mot|hai|ba|bon|tu|nam|sau|bay|tam|chin|muoi|ca|nua)\s+(thang|nam|quy)\b/;
   if (!out.split && (m=PER.exec(t))){ const q=m[1], unit=m[2]; const k = q==="ca" ? 1 : q==="nua" ? .5 : /^\d+$/.test(q) ? +q : NW[q], n = k ? Math.round(k*(unit==="nam"?12:unit==="quy"?3:1)) : 0;
     if (n){ if(n>=2&&n<=36){ out.split=n; mask(m.index,m.index+m[0].length); } } }
+  if (fromM && out.split) out.date=startAt(fromM);
   // số tiền
   const a=parseAmountText(t); if(a){ out.amount=a.v; mask(a.s,a.e); }
   take(/\b(nghin dong|dong|vnd)\b/);
