@@ -279,6 +279,9 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .chip.fq{display:inline-flex;align-items:center;gap:6px;padding:4px 12px 4px 4px}
 .chip.fq[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 18%,var(--surface));border-color:var(--c);color:inherit}
 .freqrow{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+/* "Hay dùng" / "Gợi ý": xếp xuống dòng thay vì kéo ngang */
+.freqrow .quick,.vsug .quick{flex-wrap:wrap;overflow:visible;gap:8px}
+.freqrow .chip.fq,.vsug .chip.fq{white-space:normal;text-align:left}
 .notesugg{display:flex;flex-direction:column;margin-top:6px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .notesugg button{display:flex;align-items:center;gap:8px;padding:9px 10px;border:0;background:var(--surface-2);color:inherit;text-align:left}
 .notesugg button + button{border-top:1px solid var(--line)} .notesugg span:not(.ico){flex:1;min-width:0;overflow-wrap:anywhere} .notesugg em{font-style:normal;color:var(--muted);flex:none}
