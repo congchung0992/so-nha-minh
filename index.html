@@ -1005,9 +1005,11 @@ function quickTemplates(kind){
   return [...m.values()].filter(o=>o.n>=2).sort((a,b)=>b.n-a.n||b.t.date.localeCompare(a.t.date)).slice(0,8).map(o=>o.t);
 }
 // hạng mục dùng nhiều nhất 3 tháng gần đây
+// chỉ lấy hạng mục chi tiết: bỏ mục chung của nhóm (mục mà các mục khác nhận làm nhóm cha)
+const isGroupHead = c => !!c && !c.parent && S.cats.some(x=>x.kind===c.kind && x.parent===c.name);
 function frequentCats(kind, n=8){
   const since=dateAdd(todayStr(),-90), cnt={};
-  S.txs.forEach(t=>{ if(t.kind===kind&&t.categoryId&&t.date>=since&&catById(t.categoryId)) cnt[t.categoryId]=(cnt[t.categoryId]||0)+1; });
+  S.txs.forEach(t=>{ const c=catById(t.categoryId); if(t.kind===kind&&c&&t.date>=since&&!isGroupHead(c)) cnt[t.categoryId]=(cnt[t.categoryId]||0)+1; });
   return Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,n).map(([id])=>catById(id));
 }
 // gợi ý ghi chú cũ khớp chữ đang gõ (không phân biệt dấu), kèm hạng mục lần gần nhất dùng ghi chú đó
@@ -1184,7 +1186,7 @@ function voiceSheet(){
       const all=S.cats.filter(x=>x.kind===kind).sort((p,q)=>(p.order||0)-(q.order||0));
       cbox.innerHTML=`<div class="row between"><h2>Hạng mục</h2><span class="small muted">chạm để chọn</span></div>
         <div class="catsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="input" id="vCatQ" type="search" placeholder="Tìm hạng mục, ví dụ: điện, chợ, con…" autocomplete="off" aria-label="Tìm hạng mục"></div>
-        <div class="vsug"><div class="flabel">Gợi ý</div><div class="quick" id="vSug"></div></div>
+        <div class="vsug"><div class="flabel">Gợi ý</div><div class="catgrid" id="vSug"></div></div>
         <div class="catgroups">${groupedCatGrid(all,"data-vc","")}</div>
         <p class="small muted" id="vCatNone" hidden style="margin:0;text-align:center">Không có hạng mục nào khớp.</p>`;
       const q=$("#vCatQ"); q.oninput=()=>{ const w=strip(q.value).split(/\s+/).filter(Boolean); let n=0;
@@ -1193,7 +1195,7 @@ function voiceSheet(){
       cbox.addEventListener("click",e=>{ const b=e.target.closest("[data-vc]"); if(!b) return; pickedCat=b.dataset.vc; show(); }); }
     const ids=[...new Set([auto,...cands,...frequentCats(kind,8).map(x=>x.id)].filter(id=>id&&catById(id)))].slice(0,8);
     const sug=cbox.querySelector("#vSug"); if(!sug) return;
-    sug.innerHTML=ids.map(id=>{ const x=catById(id); return `<button class="chip fq" style="--c:${catColor(x)}" data-vc="${esc(id)}">${icoHTML(catIconKey(x),"xs")}${esc(x.name)}</button>`; }).join("");
+    sug.innerHTML=ids.map(id=>{ const x=catById(id); return `<button class="catbtn" style="--c:${catColor(x)}" data-vc="${esc(id)}">${icoHTML(catIconKey(x))}<span class="n">${esc(x.name)}</span></button>`; }).join("");
     cbox.querySelector(".vsug").hidden=!ids.length||!!cbox.querySelector("#vCatQ").value.trim();
     markVc(); };
   txt.oninput=show;
@@ -1266,7 +1268,7 @@ function formView(){
   ${f.kind==="transfer" ? "" : `<section class="card">
     <div class="row between"><h2>Hạng mục</h2><button class="link" id="editCats">Sửa hạng mục</button></div>
     ${cats.length>8?`<div class="catsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="input" id="catQ" type="search" placeholder="Tìm hạng mục, ví dụ: điện, chợ, con…" autocomplete="off" aria-label="Tìm hạng mục"></div>`:""}
-    ${freq.length>=4 && cats.length>8 ? `<div class="freqrow" id="freqRow"><div class="flabel">Hay dùng</div><div class="quick">${freq.map(c=>`<button class="chip fq" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c),"xs")}${esc(c.name)}</button>`).join("")}</div></div>` : ""}
+    ${freq.length>=4 && cats.length>8 ? `<div class="freqrow" id="freqRow"><div class="flabel">Hay dùng</div><div class="catgrid">${freq.map(c=>`<button class="catbtn" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c))}<span class="n">${esc(c.name)}</span></button>`).join("")}</div></div>` : ""}
     <div class="catgroups">${groupedCatGrid(cats,"data-cat",f.categoryId)}</div>
     <p class="small muted" id="catNone" hidden style="margin:0;text-align:center">Không có hạng mục nào khớp. Bấm “Sửa hạng mục” để thêm mới.</p>
   </section>`}
