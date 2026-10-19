@@ -303,9 +303,16 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 /* nút Lưu / Huỷ nổi bên phải, luôn bám màn hình khi cuộn form ghi chép */
 .fabside{position:fixed;top:50%;right:max(6px,calc((100vw - 560px) / 2 + 6px));transform:translateY(-50%);z-index:15;display:flex;flex-direction:column;gap:10px}
 #view.enter > .fabside{animation:none}
-.fabside button{width:42px;height:42px;border-radius:50%;border:0;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.28);padding:0}
+.fabside{gap:12px;align-items:center}
+.fabside button{width:44px;height:44px;border-radius:50%;border:0;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.22);padding:0}
 .fabside button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
-.fabside .ok{background:var(--accent);color:var(--accent-ink)} .fabside .no{background:var(--surface-2);color:var(--fg);border:1px solid var(--line)}
+/* nút Lưu: ô bo góc xanh chuyển sắc, viền trắng, dấu tích + chữ Lưu */
+.fabside .ok{width:54px;height:62px;border-radius:18px;display:flex;flex-direction:column;gap:1px;background:linear-gradient(160deg,#16a37f,var(--brand) 85%);color:#fff;border:2.5px solid #fff;box-shadow:0 8px 22px color-mix(in srgb,var(--brand) 45%,transparent)}
+.fabside .ok svg{width:24px;height:24px;stroke-width:3}
+.fabside .ok span{font-weight:800;font-size:var(--fs-md);line-height:1}
+/* nút ghi âm: tròn trắng, mic màu chủ đạo, vòng sáng nhẹ */
+.fabside .mic{width:50px;height:50px;background:var(--surface);color:var(--brand);border:2px solid color-mix(in srgb,var(--brand) 35%,transparent);animation:micglow 2.4s ease-in-out infinite}
+@keyframes micglow{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.18),0 0 0 0 color-mix(in srgb,var(--brand) 30%,transparent)}50%{box-shadow:0 4px 14px rgba(0,0,0,.18),0 0 0 7px transparent}} .fabside .no{background:var(--surface-2);color:var(--fg);border:1px solid var(--line)}
 .fabside button:disabled{opacity:.5}
 .btnrow .btn{flex:1}
 .err{color:var(--expense);font-size:var(--fs-md)}
@@ -1262,7 +1269,7 @@ function formView(){
   <div class="err" id="fErr" role="alert"></div>
   ${editing && !ro ? `<button class="btn ghost" id="fDup">Ghi thêm một khoản giống thế này (ngày hôm nay)</button>` : ""}
   <div class="btnrow">${editing?`<button class="btn ghost" id="fCancel">Huỷ</button>`:""}<button class="btn" id="fSave" ${ro?"disabled":""}>${editing?"Lưu thay đổi":"Lưu ghi chép"}</button></div>
-  <div class="fabside">${ro?"":`<button class="ok" id="fSaveFab" aria-label="${editing?"Lưu thay đổi":"Lưu ghi chép"}" title="Lưu"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>`}${editing?`<button class="no" id="fCancelFab" aria-label="Huỷ" title="Huỷ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:""}</div>
+  <div class="fabside">${ro||editing?"":`<button class="mic" id="fMicFab" aria-label="Ghi bằng giọng nói" title="Nói để ghi"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>`}${ro?"":`<button class="ok" id="fSaveFab" aria-label="${editing?"Lưu thay đổi":"Lưu ghi chép"}" title="Lưu"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Lưu</span></button>`}${editing?`<button class="no" id="fCancelFab" aria-label="Huỷ" title="Huỷ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:""}</div>
   ${editing && !ro ? (S.confirmDel ? `<div class="note row between" style="flex-wrap:wrap"><span>Xoá hẳn khoản này?</span><span class="row"><button class="chip" id="fDelNo">Không</button><button class="btn danger" id="fDelYes" style="min-height:38px;padding:8px 14px">Xoá</button></span></div>` : `<button class="btn danger" id="fDel">Xoá ghi chép</button>`) : ""}`;
   const amt = $("#fAmount");
   amt.addEventListener("input",()=>{ const n=parseAmount(amt.value); f.amount=n||""; amt.value=n?fmt(n):""; });
@@ -1278,6 +1285,7 @@ function formView(){
   document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{ const t=tpls[+b.dataset.tpl]; Object.assign(f,{categoryId:t.categoryId,note:t.note||"",amount:+t.amount,walletId:walletById(t.walletId)?t.walletId:f.walletId}); formView(); toast("Đã điền sẵn, kiểm tra rồi bấm Lưu"); });
   document.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ f.date=b.dataset.d; $("#fDate").value=f.date; document.querySelectorAll("[data-d]").forEach(z=>z.setAttribute("aria-pressed",z===b)); });
   const mic=$("#fMic"); if(mic) mic.onclick=()=>voiceSheet();
+  const micFab=$("#fMicFab"); if(micFab) micFab.onclick=()=>voiceSheet();
   const dup=$("#fDup"); if(dup) dup.onclick=()=>{ const {kind,amount,categoryId,walletId,toWalletId,note}=f; S.editId=null; S.confirmDel=false; S.form={kind,amount,categoryId,walletId,toWalletId,note,date:todayStr()}; formView(); window.scrollTo(0,0); toast("Đã chép sang khoản mới, bấm Lưu để ghi"); };
   // Enter trên bàn phím (ô số tiền / ghi chú) = Lưu
   ["#fAmount","#fNote"].forEach(sel=>{ const el=$(sel); if(el) el.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); el.blur(); saveForm(); } }); });
