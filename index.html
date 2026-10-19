@@ -268,13 +268,10 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .vprev{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:14px;padding:10px 12px}
 .vprev > div:not(.vcats):not(.vsplit){display:flex;justify-content:space-between;gap:12px}
 .vcats{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line);margin-top:2px} .vcats > span{color:var(--muted)} .vprev span{color:var(--muted)} .vprev b{display:inline-flex;align-items:center;gap:6px;text-align:right;overflow-wrap:anywhere} .vprev i{color:var(--muted);font-weight:500}
-.tpl{flex:none;display:flex;align-items:center;gap:8px;max-width:220px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--c) 8%,var(--surface));text-align:left;color:inherit}
-.tpl > span:not(.ico){display:flex;flex-direction:column;min-width:0;line-height:1.25} .tpl b{font-weight:600;overflow-wrap:anywhere}
 .ico.xs{width:22px;height:22px;border-radius:7px}
 .selrow.top{align-items:flex-start} .selrow.top > .ico{margin-top:4px}
 .splitchips{margin-top:6px;flex-wrap:wrap} .splitchips .chip{padding:4px 12px} .selrow .splitn{width:96px;text-align:center;border:1px solid var(--line);border-radius:999px;background:var(--surface);min-height:0;padding:4px 10px;font-weight:600}
 .splitprev{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 4px} .splitprev span{white-space:nowrap}
-.datechips{margin-top:6px} .datechips .chip{padding:4px 12px}
 .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .chip.fq{display:inline-flex;align-items:center;gap:6px;padding:4px 12px 4px 4px}
 .chip.fq[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 18%,var(--surface));border-color:var(--c);color:inherit}
@@ -997,13 +994,6 @@ function splitParts(amount, date, n, note){
     return {date:yy+"-"+pad(mo)+"-"+pad(Math.min(d,last)), amount:i<n-1?each:amount-each*(n-1), note:n>1?((note||"").trim()?(note||"").trim()+" ":"")+`(${i+1}/${n})`:(note||"")}; });
 }
 const shortAmt = n => n>=1e6 ? (n/1e6).toFixed(n%1e6?1:0).replace(".",",")+"tr" : n>=1000 ? Math.round(n/1000)+"k" : fmt(n);
-// khoản hay lặp lại (cùng hạng mục + ghi chú + số tiền, ≥ 2 lần trong 4 tháng) → chạm một lần là điền sẵn cả form
-function quickTemplates(kind){
-  const since=dateAdd(todayStr(),-120), m=new Map();
-  S.txs.forEach(t=>{ if(t.kind!==kind||!t.categoryId||!catById(t.categoryId)||t.date<since) return;
-    const key=t.categoryId+"|"+strip(t.note||"")+"|"+t.amount, o=m.get(key)||{t,n:0}; o.n++; if(t.date>=o.t.date) o.t=t; m.set(key,o); });
-  return [...m.values()].filter(o=>o.n>=2).sort((a,b)=>b.n-a.n||b.t.date.localeCompare(a.t.date)).slice(0,8).map(o=>o.t);
-}
 // hạng mục dùng nhiều nhất 3 tháng gần đây
 // chỉ lấy hạng mục chi tiết: bỏ mục chung của nhóm (mục mà các mục khác nhận làm nhóm cha)
 const isGroupHead = c => !!c && !c.parent && S.cats.some(x=>x.kind===c.kind && x.parent===c.name);
@@ -1242,7 +1232,7 @@ function formView(){
   const ws = sortedWallets();
   const opt = sel=>ws.map(w=>`<option value="${esc(w.id)}" ${w.id===sel?"selected":""}>${esc(w.name)}</option>`).join("");
   const kc = f.kind==="income"?"in-c":f.kind==="expense"?"out-c":"tr-c";
-  const tpls = editing||f.kind==="transfer" ? [] : quickTemplates(f.kind), freq = f.kind==="transfer" ? [] : frequentCats(f.kind);
+  const freq = f.kind==="transfer" ? [] : frequentCats(f.kind);
   $("#view").innerHTML = `
   <section class="kindhead k-${f.kind}">
     <div class="row between"><h2>${editing?"Sửa ghi chép":"Ghi chép mới"}</h2>${editing?`<span class="small muted">Người nhập: ${esc(byName(f.by))}</span>`:ro?"":`<button class="micbtn" id="fMic" aria-label="Ghi bằng giọng nói"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>Nói để ghi</button>`}</div>
@@ -1251,11 +1241,8 @@ function formView(){
     <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="0" value="${f.amount?fmt(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
     <div class="quick">${[20000,50000,100000,200000,500000,1000000].map(n=>`<button class="chip" data-q="${n}">${fmt(n)}</button>`).join("")}<button class="chip" data-x="000">×1.000</button></div>
   </section>
-  ${!editing && f.kind!=="transfer" && tpls.length ? `<section class="card" style="gap:8px"><div class="row between"><h2>Ghi nhanh</h2><span class="small muted">chạm để điền sẵn</span></div>
-    <div class="hscroll">${tpls.map((t,i)=>{ const c=catById(t.categoryId); return `<button class="tpl" data-tpl="${i}" style="--c:${catColor(c)}">${icoHTML(catIconKey(c),"sm")}<span><b>${esc(t.note||c.name)}</b><span class="num ${kc}">${shortAmt(+t.amount)}</span></span></button>`; }).join("")}</div></section>` : ""}
   <section class="card" style="gap:0">
-    <div class="selrow" style="border-top:0">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><input type="date" id="fDate" value="${esc(f.date)}">
-      <div class="quick datechips">${[[0,"Hôm nay"],[-1,"Hôm qua"],[-2,"Hôm kia"]].map(([k,l])=>{ const d=dateAdd(todayStr(),k); return `<button class="chip" data-d="${d}" aria-pressed="${f.date===d}">${l}</button>`; }).join("")}</div></div></div>
+    <div class="selrow" style="border-top:0">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><input type="date" id="fDate" value="${esc(f.date)}"></div></div>
     <div class="selrow">${icoHTML("pen","sm")}<div class="mid"><div class="flabel">Ghi chú</div><input id="fNote" maxlength="200" placeholder="Ví dụ: chợ sáng" value="${esc(f.note)}" autocomplete="off" enterkeyhint="done"><div class="notesugg" id="noteSugg" hidden></div></div></div>
     ${f.kind==="transfer" ? `
       <div class="selrow">${icoHTML("transfer","sm")}<div class="mid"><div class="flabel">Từ ví</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
@@ -1287,9 +1274,6 @@ function formView(){
     document.querySelectorAll(".catgroups .catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; }); syncCatSections($("#view")); $("#catNone").hidden=n>0; const fr=$("#freqRow"); if(fr) fr.hidden=w.length>0; };
   const markCat=()=>document.querySelectorAll("[data-cat]").forEach(z=>z.setAttribute("aria-pressed", z.dataset.cat===f.categoryId));
   document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{ f.categoryId=b.dataset.cat; markCat(); });
-  // ghi nhanh: điền hạng mục, ghi chú, số tiền, ví như lần trước; giữ ngày đang chọn
-  document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{ const t=tpls[+b.dataset.tpl]; Object.assign(f,{categoryId:t.categoryId,note:t.note||"",amount:+t.amount,walletId:walletById(t.walletId)?t.walletId:f.walletId}); formView(); toast("Đã điền sẵn, kiểm tra rồi bấm Lưu"); });
-  document.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ f.date=b.dataset.d; $("#fDate").value=f.date; document.querySelectorAll("[data-d]").forEach(z=>z.setAttribute("aria-pressed",z===b)); });
   const mic=$("#fMic"); if(mic) mic.onclick=()=>voiceSheet();
   const micFab=$("#fMicFab"); if(micFab) micFab.onclick=()=>voiceSheet();
   const dup=$("#fDup"); if(dup) dup.onclick=()=>{ const {kind,amount,categoryId,walletId,toWalletId,note}=f; S.editId=null; S.confirmDel=false; S.form={kind,amount,categoryId,walletId,toWalletId,note,date:todayStr()}; formView(); window.scrollTo(0,0); toast("Đã chép sang khoản mới, bấm Lưu để ghi"); };
@@ -1300,7 +1284,7 @@ function formView(){
   const sn=$("#fSplitN"); if(sn) sn.onchange=()=>{ const n=parseInt(sn.value,10); f.split=n>=2&&n<=36?n:1; formView(); };
   const fw=$("#fWallet"); if(fw) fw.onchange=()=>{ f.walletId=fw.value; formView(); };
   const ft=$("#fTo"); if(ft) ft.onchange=()=>{ f.toWalletId=ft.value; formView(); };
-  $("#fDate").onchange=e=>{ f.date=e.target.value; document.querySelectorAll("[data-d]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.d===f.date)); };
+  $("#fDate").onchange=e=>{ f.date=e.target.value; };
   const fn=$("#fNote"), ns=$("#noteSugg");
   // gõ ghi chú → gợi ý ghi chú cũ; chọn gợi ý thì tự chọn luôn hạng mục lần trước (nếu chưa chọn)
   const showSugg=()=>{ const list=f.kind==="transfer"?[]:noteSuggestions(f.kind,fn.value); ns.hidden=!list.length;
