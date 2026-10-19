@@ -237,7 +237,12 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .vpanel > .row:first-child{position:sticky;top:calc(-14px - env(safe-area-inset-top,0px));z-index:2;background:var(--surface);padding:14px 0 6px;margin-top:-14px}
 .vcatbox{display:flex;flex-direction:column;gap:10px} .vsug{display:flex;flex-direction:column;gap:6px}
 .vfoot{position:sticky;bottom:0;margin:auto -16px 0;padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--surface) 30%)}
-.vfoot .btn{width:100%}
+.vfoot .btnrow .btn.ghost{flex:0 0 auto;padding-inline:18px}
+.vfoot .btn.off{opacity:.45}
+.vneed{background:var(--warn-bg);color:var(--warn-fg);border-radius:12px;padding:9px 12px;margin-bottom:8px}
+.vneed.shake{animation:vshake .4s}
+@keyframes vshake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.vprev .miss span,.vprev .miss b{color:var(--expense)}
 .vmic{flex:none;align-self:center;width:76px;height:76px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .vmic svg{width:34px;height:34px}
 .vmic.on{background:var(--expense);color:#fff;animation:micpulse 1.2s ease-in-out infinite}
@@ -476,7 +481,7 @@ const NAME_HINTS = [
   [/tien dien|^dien\b/,"bolt"],[/nuoc/,"drop"],[/internet|wifi/,"wifi"],[/truyen hinh|netflix|youtube/,"tv"],[/tien nha|thue nha|nha cua/,"home"],
   [/xang/,"fuel"],[/taxi|grab|o to|xe hoi/,"car"],[/xe buyt|di lai|\btau\b|ve xe/,"bus"],[/hoc|truong|sach/,"school"],
   [/con cai|tre em|\bbe\b|bim|sua bot/,"kids"],[/suc khoe|thuoc|kham|benh/,"health"],[/quan ao|thoi trang|giay dep/,"shirt"],
-  [/mua sam|do dung/,"bag"],[/lam dep|my pham|cat toc|spa/,"beauty"],[/hieu hi|dam cuoi|ma chay|mung cuoi|phong bi/,"envelope"],[/giai tri|xem phim|karaoke/,"ticket"],
+  [/mua sam|do dung/,"bag"],[/lam dep|my pham|cat toc|spa/,"beauty"],[/hieu hi|dam cuoi|ma chay|mung cuoi|phong bi/,"envelope"],[/giai tri|xem phim|ca nhac|hoa nhac|concert|nhac hoi|show dien|\bphim\b|karaoke/,"ticket"],
   [/du lich|nghi duong/,"plane"],[/bo me|ong ba|gia dinh|bieu/,"family"],[/thu cung|cho meo|\bpet\b/,"pet"],
   [/bao hiem/,"shield"],[/tra no|tra gop|khoan vay/,"receipt"],[/the thao|gym|tap luyen/,"sport"],[/\bgas\b|bep/,"gas"],
   [/luong/,"salary"],[/thuong/,"star"],[/kinh doanh|ban hang/,"store"],[/duoc tang|qua tang|li xi|duoc cho/,"gift"],[/lai tiet kiem|tiet kiem/,"piggy"],[/thu no|cho vay/,"handshake"],[/dau tu|co tuc|chung khoan/,"coins"],
@@ -1070,9 +1075,9 @@ function voiceSheet(){
     <textarea class="input" id="vText" rows="2" placeholder="Hoặc gõ: cafe 35k hôm qua"></textarea>
     <div class="vprev" id="vPrev" hidden></div>
     <div class="vcatbox" id="vCats" hidden></div>
-    <div class="vfoot"><button class="btn" id="vApply" disabled>Điền vào form</button></div></div>`;
+    <div class="vfoot"><div class="vneed" id="vNeed" hidden></div><div class="btnrow"><button class="btn ghost" id="vApply" disabled>Sửa thêm</button><button class="btn" id="vSave" disabled>Lưu</button></div></div></div>`;
   document.body.appendChild(box);
-  const txt=$("#vText"), st=$("#vStatus"), prev=$("#vPrev"), ap=$("#vApply"), micb=$("#vMic");
+  const txt=$("#vText"), st=$("#vStatus"), prev=$("#vPrev"), ap=$("#vApply"), sv=$("#vSave"), need=$("#vNeed"), micb=$("#vMic");
   let rec=null, parsed=null, pickedCat=null, lastText="";
   const show=()=>{ if(!box.isConnected) return; const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
     if (v!==lastText){ pickedCat=null; lastText=v; }
@@ -1080,13 +1085,32 @@ function voiceSheet(){
     const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
     prev.hidden=false;
     prev.innerHTML=`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
-      <div><span>Số tiền</span><b class="num">${parsed.amount?fmt(parsed.amount)+" đ":"<i>chưa nghe rõ</i>"}</b></div>
-      ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"<i>chọn sau</i>"}</b></div>`}
+      <div class="${parsed.amount?"":"miss"}"><span>Số tiền</span><b class="num">${parsed.amount?fmt(parsed.amount)+" đ":"Chưa nghe rõ, sửa chữ trong ô"}</b></div>
+      ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div class="${c?"":"miss"}"><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"Bắt buộc chọn ↓"}</b></div>`}
       <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
       ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}
 `;
-    renderCats(parsed.kind, autoCat, parsed.cands||[]); };
+    renderCats(parsed.kind, autoCat, parsed.cands||[]); checkNeed(); };
+  // bắt buộc đủ số tiền + hạng mục (+ ví) mới cho lưu; báo rõ còn thiếu gì
+  const buildForm=()=>{ const f=S.form||blankForm();
+    return {...f,kind:parsed.kind,date:parsed.date,amount:parsed.amount||"",note:parsed.note||"",
+      categoryId:parsed.kind==="transfer"?"":(parsed.categoryId||""),
+      walletId:parsed.walletId||f.walletId, toWalletId:parsed.toWalletId||f.toWalletId}; };
+  const missing=()=>{ if(!parsed) return ["nội dung"]; const g=buildForm(), m=[];
+    if(!g.amount) m.push("số tiền");
+    if(g.kind==="transfer"){ if(!walletById(g.walletId)||!walletById(g.toWalletId)||g.walletId===g.toWalletId) m.push("ví chuyển / ví nhận"); }
+    else { if(!catById(g.categoryId)) m.push("hạng mục"); if(!walletById(g.walletId)) m.push("ví"); }
+    return m; };
+  const checkNeed=()=>{ const m=missing(); sv.classList.toggle("off",m.length>0); sv.disabled=!parsed;
+    need.hidden=!parsed||!m.length;
+    need.innerHTML=m.length?`⚠ Chưa có <b>${m.join(", ")}</b>. ${m.includes("hạng mục")?"Chạm một hạng mục bên dưới để chọn.":m.includes("số tiền")?"Nói lại hoặc sửa chữ trong ô, ví dụ “150k”.":"Bấm “Sửa thêm” để chọn."}`:""; };
+  sv.onclick=async()=>{ const m=missing();
+    if (m.length){ need.classList.remove("shake"); void need.offsetWidth; need.classList.add("shake"); if(m.includes("hạng mục")) cbox.scrollIntoView({block:"start",behavior:"smooth"}); return; }
+    sv.disabled=true; sv.textContent="Đang lưu…";
+    S.editId=null; S.form=buildForm(); formView();
+    const ok=await saveForm();
+    if (ok) close(); else { sv.disabled=false; sv.textContent="Lưu"; need.hidden=false; need.textContent="⚠ "+($("#fErr")?.textContent||"Chưa lưu được, thử lại."); } };
   // chọn / đổi hạng mục: gợi ý ở trên, bên dưới là toàn bộ hạng mục có ô tìm kiếm (chỉ vẽ lại khi đổi loại thu/chi)
   const cbox=$("#vCats"); let catsKind=null;
   const markVc=()=>cbox.querySelectorAll("[data-vc]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.vc===parsed?.categoryId));
@@ -1112,12 +1136,9 @@ function voiceSheet(){
   txt.oninput=show;
   const close=()=>{ try{rec&&rec.abort()}catch(e){} box.remove(); };
   $("#vClose").onclick=close; box.onclick=e=>{ if(e.target===box) close(); };
-  ap.onclick=()=>{ if(!parsed) return; const f=S.form||blankForm();
-    S.form={...f,kind:parsed.kind,date:parsed.date,amount:parsed.amount||f.amount||"",note:parsed.note??f.note,
-      categoryId:parsed.kind==="transfer"?"":(parsed.categoryId||(catById(f.categoryId)?.kind===parsed.kind?f.categoryId:"")),
-      walletId:parsed.walletId||f.walletId, toWalletId:parsed.toWalletId||f.toWalletId};
+  ap.onclick=()=>{ if(!parsed) return; S.form=buildForm();
     close(); formView(); window.scrollTo(0,0);
-    toast(S.form.amount&&(S.form.categoryId||S.form.kind==="transfer")?"Đã điền xong, kiểm tra rồi bấm Lưu":"Đã điền, còn thiếu "+(!S.form.amount?"số tiền":"hạng mục")); };
+    toast(S.form.amount&&(S.form.categoryId||S.form.kind==="transfer")?"Đã điền vào form, sửa thêm rồi bấm Lưu":"Đã điền, còn thiếu "+(!S.form.amount?"số tiền":"hạng mục")); };
   if (!SR){ micb.disabled=true; txt.focus(); return; }
   const start=()=>{ try{ rec=new SR(); }catch(e){ st.textContent="Không mở được mic."; return; }
     rec.lang="vi-VN"; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1;
@@ -1125,7 +1146,7 @@ function voiceSheet(){
     rec.onstart=()=>{ micb.classList.add("on"); st.textContent="Đang nghe… nói xong thì dừng một chút."; };
     rec.onresult=e=>{ let interim=""; for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) fin+=r[0].transcript; else interim+=r[0].transcript; } txt.value=(fin+interim).trim(); show(); };
     rec.onerror=e=>{ st.textContent = e.error==="not-allowed"||e.error==="service-not-allowed" ? "Chưa được phép dùng mic. Hãy cho phép mic cho trang này trong cài đặt trình duyệt." : e.error==="no-speech" ? "Chưa nghe thấy gì, bấm mic để nói lại." : "Lỗi nhận giọng nói ("+e.error+"). Bạn có thể gõ vào ô dưới."; };
-    rec.onend=()=>{ micb.classList.remove("on"); if(txt.value.trim()){ st.textContent="Kiểm tra bên dưới rồi bấm “Điền vào form” (hoặc sửa chữ trong ô)."; show(); } };
+    rec.onend=()=>{ micb.classList.remove("on"); if(txt.value.trim()){ st.textContent="Kiểm tra bên dưới rồi bấm “Lưu” (sai chữ thì sửa trong ô)."; show(); } };
     rec.start(); };
   micb.onclick=()=>{ if(micb.classList.contains("on")){ try{rec.stop()}catch(e){} } else start(); };
   start();
@@ -1219,8 +1240,8 @@ async function saveForm(){
   const body = { kind:f.kind, amount, walletId:f.walletId, date:f.date, note:(f.note||"").trim(), categoryId: f.kind==="transfer"?"":f.categoryId, toWalletId: f.kind==="transfer"?f.toWalletId:"" };
   const btn=$("#fSave"), fab=$("#fSaveFab"); btn.disabled=true; btn.textContent="Đang lưu…"; if(fab) fab.disabled=true;
   try{
-    if (S.editId){ const old=S.txs.find(t=>t.id===S.editId)||{}; await S.db.doc("tx/"+S.editId).set({...strip0(old), ...body, updatedAt:Date.now(), updatedBy:S.uid||""}); toast("Đã lưu thay đổi"); S.editId=null; S.form=null; setTab("book"); }
-    else { await S.db.collection("tx").add({...body, by:S.uid||"", createdAt:Date.now()}); toast(`Đã ghi ${f.kind==="income"?"+":f.kind==="expense"?"−":""}${fmt(amount)} đ`); const k=f.kind, w=f.walletId; S.form=blankForm(); S.form.kind=k; S.form.walletId=w; S.month=ymOf(body.date); formView(); window.scrollTo(0,0); }
+    if (S.editId){ const old=S.txs.find(t=>t.id===S.editId)||{}; await S.db.doc("tx/"+S.editId).set({...strip0(old), ...body, updatedAt:Date.now(), updatedBy:S.uid||""}); toast("Đã lưu thay đổi"); S.editId=null; S.form=null; setTab("book"); return true; }
+    else { await S.db.collection("tx").add({...body, by:S.uid||"", createdAt:Date.now()}); toast(`Đã ghi ${f.kind==="income"?"+":f.kind==="expense"?"−":""}${fmt(amount)} đ`); const k=f.kind, w=f.walletId; S.form=blankForm(); S.form.kind=k; S.form.walletId=w; S.month=ymOf(body.date); formView(); window.scrollTo(0,0); return true; }
   }catch(e){ handleWriteErr(e); btn.disabled=false; btn.textContent=S.editId?"Lưu thay đổi":"Lưu ghi chép"; if(fab) fab.disabled=false; }
 }
 
