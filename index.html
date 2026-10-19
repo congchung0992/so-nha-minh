@@ -232,9 +232,13 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 /* nhập nhanh */
 .micbtn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:7px 14px 7px 10px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
 .micbtn svg,.vmic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.vsheet{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
-.vpanel{width:100%;max-width:560px;background:var(--surface);border-radius:22px 22px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;animation:rise .25s var(--ease-out)}
-.vmic{align-self:center;width:76px;height:76px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.vsheet{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;justify-content:center}
+.vpanel{width:100%;max-width:560px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--surface);padding:calc(14px + env(safe-area-inset-top,0px)) 16px 0;display:flex;flex-direction:column;gap:12px;animation:rise .25s var(--ease-out)}
+.vpanel > .row:first-child{position:sticky;top:calc(-14px - env(safe-area-inset-top,0px));z-index:2;background:var(--surface);padding:14px 0 6px;margin-top:-14px}
+.vcatbox{display:flex;flex-direction:column;gap:10px} .vsug{display:flex;flex-direction:column;gap:6px}
+.vfoot{position:sticky;bottom:0;margin:auto -16px 0;padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--surface) 30%)}
+.vfoot .btn{width:100%}
+.vmic{flex:none;align-self:center;width:76px;height:76px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .vmic svg{width:34px;height:34px}
 .vmic.on{background:var(--expense);color:#fff;animation:micpulse 1.2s ease-in-out infinite}
 @keyframes micpulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--expense) 55%,transparent)}50%{box-shadow:0 0 0 16px transparent}}
@@ -1065,11 +1069,12 @@ function voiceSheet(){
     <div class="small muted" id="vStatus">${SR?"Bấm mic rồi nói, ví dụ: “cafe 35 nghìn hôm qua”, “đổ xăng 80k bằng thẻ”, “nhận lương 15 triệu”.":"Trình duyệt này chưa hỗ trợ nhận giọng nói. Bấm vào ô dưới rồi dùng nút mic trên bàn phím điện thoại để đọc."}</div>
     <textarea class="input" id="vText" rows="2" placeholder="Hoặc gõ: cafe 35k hôm qua"></textarea>
     <div class="vprev" id="vPrev" hidden></div>
-    <div class="btnrow"><button class="btn" id="vApply" disabled>Điền vào form</button></div></div>`;
+    <div class="vcatbox" id="vCats" hidden></div>
+    <div class="vfoot"><button class="btn" id="vApply" disabled>Điền vào form</button></div></div>`;
   document.body.appendChild(box);
   const txt=$("#vText"), st=$("#vStatus"), prev=$("#vPrev"), ap=$("#vApply"), micb=$("#vMic");
   let rec=null, parsed=null, pickedCat=null, lastText="";
-  const show=()=>{ const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
+  const show=()=>{ if(!box.isConnected) return; const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
     if (v!==lastText){ pickedCat=null; lastText=v; }
     parsed=parseSpoken(v); const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
     const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
@@ -1080,9 +1085,30 @@ function voiceSheet(){
       <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
       ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}
-      ${parsed.kind!=="transfer"?(()=>{ const ids=[...new Set([autoCat,...(parsed.cands||[]),...frequentCats(parsed.kind,8).map(x=>x.id),...S.cats.filter(x=>x.kind===parsed.kind).sort((p,q)=>(p.order||0)-(q.order||0)).map(x=>x.id)].filter(id=>id&&catById(id)))].slice(0,10);
-        return ids.length?`<div class="vcats"><span>${c?"Đổi hạng mục":"Chọn hạng mục"}</span><div class="quick">${ids.map(id=>{ const x=catById(id); return `<button class="chip fq" style="--c:${catColor(x)}" data-vc="${esc(id)}" aria-pressed="${id===parsed.categoryId}">${icoHTML(catIconKey(x),"xs")}${esc(x.name)}</button>`; }).join("")}</div></div>`:""; })():""}`;
-    prev.querySelectorAll("[data-vc]").forEach(b=>b.onclick=()=>{ pickedCat=b.dataset.vc; show(); }); };
+`;
+    renderCats(parsed.kind, autoCat, parsed.cands||[]); };
+  // chọn / đổi hạng mục: gợi ý ở trên, bên dưới là toàn bộ hạng mục có ô tìm kiếm (chỉ vẽ lại khi đổi loại thu/chi)
+  const cbox=$("#vCats"); let catsKind=null;
+  const markVc=()=>cbox.querySelectorAll("[data-vc]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.vc===parsed?.categoryId));
+  const renderCats=(kind,auto,cands)=>{
+    if (kind==="transfer"){ cbox.hidden=true; catsKind=null; return; }
+    cbox.hidden=false;
+    if (catsKind!==kind){ catsKind=kind;
+      const all=S.cats.filter(x=>x.kind===kind).sort((p,q)=>(p.order||0)-(q.order||0));
+      cbox.innerHTML=`<div class="row between"><h2>Hạng mục</h2><span class="small muted">chạm để chọn</span></div>
+        <div class="catsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="input" id="vCatQ" type="search" placeholder="Tìm hạng mục, ví dụ: điện, chợ, con…" autocomplete="off" aria-label="Tìm hạng mục"></div>
+        <div class="vsug"><div class="flabel">Gợi ý</div><div class="quick" id="vSug"></div></div>
+        <div class="catgrid">${all.map(x=>`<button class="catbtn" style="--c:${catColor(x)}" data-vc="${esc(x.id)}" data-s="${esc(strip(x.name+" "+(x.parent||"")))}">${icoHTML(catIconKey(x))}<span class="n">${esc(x.name)}</span></button>`).join("")}</div>
+        <p class="small muted" id="vCatNone" hidden style="margin:0;text-align:center">Không có hạng mục nào khớp.</p>`;
+      const q=$("#vCatQ"); q.oninput=()=>{ const w=strip(q.value).split(/\s+/).filter(Boolean); let n=0;
+        cbox.querySelectorAll(".catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; });
+        $("#vCatNone").hidden=n>0; cbox.querySelector(".vsug").hidden=w.length>0; };
+      cbox.addEventListener("click",e=>{ const b=e.target.closest("[data-vc]"); if(!b) return; pickedCat=b.dataset.vc; show(); }); }
+    const ids=[...new Set([auto,...cands,...frequentCats(kind,8).map(x=>x.id)].filter(id=>id&&catById(id)))].slice(0,8);
+    const sug=cbox.querySelector("#vSug"); if(!sug) return;
+    sug.innerHTML=ids.map(id=>{ const x=catById(id); return `<button class="chip fq" style="--c:${catColor(x)}" data-vc="${esc(id)}">${icoHTML(catIconKey(x),"xs")}${esc(x.name)}</button>`; }).join("");
+    cbox.querySelector(".vsug").hidden=!ids.length||!!cbox.querySelector("#vCatQ").value.trim();
+    markVc(); };
   txt.oninput=show;
   const close=()=>{ try{rec&&rec.abort()}catch(e){} box.remove(); };
   $("#vClose").onclick=close; box.onclick=e=>{ if(e.target===box) close(); };
