@@ -229,6 +229,18 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .toast{display:flex;align-items:center;gap:12px} .toast .undo{border:0;background:none;color:var(--accent-soft);font-weight:800;padding:2px 0;text-decoration:underline}
 .listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 2px}
 .catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 6px}
+/* nhập nhanh */
+.tpl{flex:none;display:flex;align-items:center;gap:8px;max-width:220px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--c) 8%,var(--surface));text-align:left;color:inherit}
+.tpl > span:not(.ico){display:flex;flex-direction:column;min-width:0;line-height:1.25} .tpl b{font-weight:600;overflow-wrap:anywhere}
+.ico.xs{width:22px;height:22px;border-radius:7px}
+.datechips{margin-top:6px} .datechips .chip{padding:4px 12px}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.chip.fq{display:inline-flex;align-items:center;gap:6px;padding:4px 12px 4px 4px}
+.chip.fq[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 18%,var(--surface));border-color:var(--c);color:inherit}
+.freqrow{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.notesugg{display:flex;flex-direction:column;margin-top:6px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.notesugg button{display:flex;align-items:center;gap:8px;padding:9px 10px;border:0;background:var(--surface-2);color:inherit;text-align:left}
+.notesugg button + button{border-top:1px solid var(--line)} .notesugg span:not(.ico){flex:1;min-width:0;overflow-wrap:anywhere} .notesugg em{font-style:normal;color:var(--muted);flex:none}
 .catbtn{border:0;background:none;border-radius:14px;padding:8px 2px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:var(--fs-md);text-align:center;min-width:0;font-weight:500}
 .catbtn span.n{line-height:1.25;min-height:2.5em;overflow-wrap:anywhere;hyphens:auto}
 .catbtn[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 12%,transparent)}
@@ -921,6 +933,30 @@ function bookView(){
 }
 
 /* ---------- Ghi chép ---------- */
+/* ---------- nhập nhanh (học theo MISA, Money Lover, Monefy…) ---------- */
+const dateAdd = (s,k) => { const [y,m,d]=s.split("-").map(Number); const x=new Date(y,m-1,d+k); return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate()); };
+const shortAmt = n => n>=1e6 ? (n/1e6).toFixed(n%1e6?1:0).replace(".",",")+"tr" : n>=1000 ? Math.round(n/1000)+"k" : fmt(n);
+// khoản hay lặp lại (cùng hạng mục + ghi chú + số tiền, ≥ 2 lần trong 4 tháng) → chạm một lần là điền sẵn cả form
+function quickTemplates(kind){
+  const since=dateAdd(todayStr(),-120), m=new Map();
+  S.txs.forEach(t=>{ if(t.kind!==kind||!t.categoryId||!catById(t.categoryId)||t.date<since) return;
+    const key=t.categoryId+"|"+strip(t.note||"")+"|"+t.amount, o=m.get(key)||{t,n:0}; o.n++; if(t.date>=o.t.date) o.t=t; m.set(key,o); });
+  return [...m.values()].filter(o=>o.n>=2).sort((a,b)=>b.n-a.n||b.t.date.localeCompare(a.t.date)).slice(0,8).map(o=>o.t);
+}
+// hạng mục dùng nhiều nhất 3 tháng gần đây
+function frequentCats(kind, n=8){
+  const since=dateAdd(todayStr(),-90), cnt={};
+  S.txs.forEach(t=>{ if(t.kind===kind&&t.categoryId&&t.date>=since&&catById(t.categoryId)) cnt[t.categoryId]=(cnt[t.categoryId]||0)+1; });
+  return Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,n).map(([id])=>catById(id));
+}
+// gợi ý ghi chú cũ khớp chữ đang gõ (không phân biệt dấu), kèm hạng mục lần gần nhất dùng ghi chú đó
+function noteSuggestions(kind, q){
+  const w=strip(q).split(/\s+/).filter(Boolean); if(!w.length) return [];
+  const m=new Map();
+  S.txs.forEach(t=>{ const note=(t.note||"").trim(); if(t.kind!==kind||!note) return; const k=strip(note); if(!w.every(x=>k.includes(x))) return;
+    const o=m.get(k)||{note,n:0,t}; o.n++; if(t.date>=o.t.date) o.t=t; m.set(k,o); });
+  return [...m.values()].filter(o=>strip(o.note)!==strip(q)).sort((a,b)=>b.n-a.n).slice(0,5);
+}
 function blankForm(){ const ws=sortedWallets(); return {kind:"expense",amount:"",categoryId:"",walletId:ws[0]?.id||"",toWalletId:ws[1]?.id||"",date:todayStr(),note:""}; }
 function formView(){
   if (!S.form) S.form = blankForm();
@@ -929,17 +965,21 @@ function formView(){
   const ws = sortedWallets();
   const opt = sel=>ws.map(w=>`<option value="${esc(w.id)}" ${w.id===sel?"selected":""}>${esc(w.name)}</option>`).join("");
   const kc = f.kind==="income"?"in-c":f.kind==="expense"?"out-c":"tr-c";
+  const tpls = editing||f.kind==="transfer" ? [] : quickTemplates(f.kind), freq = f.kind==="transfer" ? [] : frequentCats(f.kind);
   $("#view").innerHTML = `
   <section class="kindhead k-${f.kind}">
     <div class="row between"><h2>${editing?"Sửa ghi chép":"Ghi chép mới"}</h2>${editing?`<span class="small muted">Người nhập: ${esc(byName(f.by))}</span>`:""}</div>
     ${ro?`<div class="note">Bạn đang chỉ có quyền xem sổ này.</div>`:""}
     <div class="seg" role="group" aria-label="Loại">${[["expense","Chi tiền"],["income","Thu tiền"],["transfer","Chuyển ví"]].map(([k,l])=>`<button data-k="${k}" aria-pressed="${f.kind===k}">${l}</button>`).join("")}</div>
-    <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" autocomplete="off" placeholder="0" value="${f.amount?fmt(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
+    <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="0" value="${f.amount?fmt(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
     <div class="quick">${[20000,50000,100000,200000,500000,1000000].map(n=>`<button class="chip" data-q="${n}">${fmt(n)}</button>`).join("")}<button class="chip" data-x="000">×1.000</button></div>
   </section>
+  ${!editing && f.kind!=="transfer" && tpls.length ? `<section class="card" style="gap:8px"><div class="row between"><h2>Ghi nhanh</h2><span class="small muted">chạm để điền sẵn</span></div>
+    <div class="hscroll">${tpls.map((t,i)=>{ const c=catById(t.categoryId); return `<button class="tpl" data-tpl="${i}" style="--c:${catColor(c)}">${icoHTML(catIconKey(c),"sm")}<span><b>${esc(t.note||c.name)}</b><span class="num ${kc}">${shortAmt(+t.amount)}</span></span></button>`; }).join("")}</div></section>` : ""}
   <section class="card" style="gap:0">
-    <div class="selrow" style="border-top:0">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><input type="date" id="fDate" value="${esc(f.date)}"></div></div>
-    <div class="selrow">${icoHTML("pen","sm")}<div class="mid"><div class="flabel">Ghi chú</div><input id="fNote" maxlength="200" placeholder="Ví dụ: chợ sáng" value="${esc(f.note)}"></div></div>
+    <div class="selrow" style="border-top:0">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><input type="date" id="fDate" value="${esc(f.date)}">
+      <div class="quick datechips">${[[0,"Hôm nay"],[-1,"Hôm qua"],[-2,"Hôm kia"]].map(([k,l])=>{ const d=dateAdd(todayStr(),k); return `<button class="chip" data-d="${d}" aria-pressed="${f.date===d}">${l}</button>`; }).join("")}</div></div></div>
+    <div class="selrow">${icoHTML("pen","sm")}<div class="mid"><div class="flabel">Ghi chú</div><input id="fNote" maxlength="200" placeholder="Ví dụ: chợ sáng" value="${esc(f.note)}" autocomplete="off" enterkeyhint="done"><div class="notesugg" id="noteSugg" hidden></div></div></div>
     ${f.kind==="transfer" ? `
       <div class="selrow">${icoHTML("transfer","sm")}<div class="mid"><div class="flabel">Từ ví</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
       <div class="selrow">${icoHTML(walletIconKey(walletById(f.toWalletId)),"sm")}<div class="mid"><div class="flabel">Sang ví</div><select id="fTo">${opt(f.toWalletId)}</select></div></div>`
@@ -948,10 +988,12 @@ function formView(){
   ${f.kind==="transfer" ? "" : `<section class="card">
     <div class="row between"><h2>Hạng mục</h2><button class="link" id="editCats">Sửa hạng mục</button></div>
     ${cats.length>8?`<div class="catsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="input" id="catQ" type="search" placeholder="Tìm hạng mục, ví dụ: điện, chợ, con…" autocomplete="off" aria-label="Tìm hạng mục"></div>`:""}
+    ${freq.length>=4 && cats.length>8 ? `<div class="freqrow" id="freqRow"><div class="flabel">Hay dùng</div><div class="quick">${freq.map(c=>`<button class="chip fq" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c),"xs")}${esc(c.name)}</button>`).join("")}</div></div>` : ""}
     <div class="catgrid">${cats.map(c=>`<button class="catbtn" style="--c:${catColor(c)}" data-cat="${esc(c.id)}" data-s="${esc(strip(c.name+" "+(c.parent||"")))}" aria-pressed="${f.categoryId===c.id}">${icoHTML(catIconKey(c))}<span class="n">${esc(c.name)}</span></button>`).join("")}</div>
     <p class="small muted" id="catNone" hidden style="margin:0;text-align:center">Không có hạng mục nào khớp. Bấm “Sửa hạng mục” để thêm mới.</p>
   </section>`}
   <div class="err" id="fErr" role="alert"></div>
+  ${editing && !ro ? `<button class="btn ghost" id="fDup">Ghi thêm một khoản giống thế này (ngày hôm nay)</button>` : ""}
   <div class="btnrow">${editing?`<button class="btn ghost" id="fCancel">Huỷ</button>`:""}<button class="btn" id="fSave" ${ro?"disabled":""}>${editing?"Lưu thay đổi":"Lưu ghi chép"}</button></div>
   <div class="fabside">${ro?"":`<button class="ok" id="fSaveFab" aria-label="${editing?"Lưu thay đổi":"Lưu ghi chép"}" title="Lưu"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>`}${editing?`<button class="no" id="fCancelFab" aria-label="Huỷ" title="Huỷ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:""}</div>
   ${editing && !ro ? (S.confirmDel ? `<div class="note row between" style="flex-wrap:wrap"><span>Xoá hẳn khoản này?</span><span class="row"><button class="chip" id="fDelNo">Không</button><button class="btn danger" id="fDelYes" style="min-height:38px;padding:8px 14px">Xoá</button></span></div>` : `<button class="btn danger" id="fDel">Xoá ghi chép</button>`) : ""}`;
@@ -961,13 +1003,27 @@ function formView(){
   document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ f.amount=Number(b.dataset.q); formView(); });
   $("[data-x]").onclick=()=>{ f.amount=(Number(f.amount)||0)*1000; formView(); };
   const cq=$("#catQ"); if(cq) cq.oninput=()=>{ const w=strip(cq.value).split(/\s+/).filter(Boolean); let n=0;
-    document.querySelectorAll(".catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; }); $("#catNone").hidden=n>0; };
-  document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{ f.categoryId=b.dataset.cat; document.querySelectorAll("[data-cat]").forEach(z=>z.setAttribute("aria-pressed", z===b)); });
+    document.querySelectorAll(".catgrid [data-s]").forEach(b=>{ const ok=w.every(x=>b.dataset.s.includes(x)); b.hidden=!ok; if(ok) n++; }); $("#catNone").hidden=n>0; const fr=$("#freqRow"); if(fr) fr.hidden=w.length>0; };
+  const markCat=()=>document.querySelectorAll("[data-cat]").forEach(z=>z.setAttribute("aria-pressed", z.dataset.cat===f.categoryId));
+  document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{ f.categoryId=b.dataset.cat; markCat(); });
+  // ghi nhanh: điền hạng mục, ghi chú, số tiền, ví như lần trước; giữ ngày đang chọn
+  document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{ const t=tpls[+b.dataset.tpl]; Object.assign(f,{categoryId:t.categoryId,note:t.note||"",amount:+t.amount,walletId:walletById(t.walletId)?t.walletId:f.walletId}); formView(); toast("Đã điền sẵn, kiểm tra rồi bấm Lưu"); });
+  document.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ f.date=b.dataset.d; $("#fDate").value=f.date; document.querySelectorAll("[data-d]").forEach(z=>z.setAttribute("aria-pressed",z===b)); });
+  const dup=$("#fDup"); if(dup) dup.onclick=()=>{ const {kind,amount,categoryId,walletId,toWalletId,note}=f; S.editId=null; S.confirmDel=false; S.form={kind,amount,categoryId,walletId,toWalletId,note,date:todayStr()}; formView(); window.scrollTo(0,0); toast("Đã chép sang khoản mới, bấm Lưu để ghi"); };
+  // Enter trên bàn phím (ô số tiền / ghi chú) = Lưu
+  ["#fAmount","#fNote"].forEach(sel=>{ const el=$(sel); if(el) el.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); el.blur(); saveForm(); } }); });
   const ec=$("#editCats"); if(ec) ec.onclick=()=>{ S.catKind=f.kind==="income"?"income":"expense"; S.moreSub="cats"; S.backTo="add"; S.tab="more"; markTab("more"); render(); window.scrollTo(0,0); };
   const fw=$("#fWallet"); if(fw) fw.onchange=()=>{ f.walletId=fw.value; formView(); };
   const ft=$("#fTo"); if(ft) ft.onchange=()=>{ f.toWalletId=ft.value; formView(); };
-  $("#fDate").onchange=e=>f.date=e.target.value;
-  $("#fNote").oninput=e=>f.note=e.target.value;
+  $("#fDate").onchange=e=>{ f.date=e.target.value; document.querySelectorAll("[data-d]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.d===f.date)); };
+  const fn=$("#fNote"), ns=$("#noteSugg");
+  // gõ ghi chú → gợi ý ghi chú cũ; chọn gợi ý thì tự chọn luôn hạng mục lần trước (nếu chưa chọn)
+  const showSugg=()=>{ const list=f.kind==="transfer"?[]:noteSuggestions(f.kind,fn.value); ns.hidden=!list.length;
+    ns.innerHTML=list.map((o,i)=>{ const c=catById(o.t.categoryId); return `<button type="button" data-ns="${i}">${c?icoHTML(catIconKey(c),"xs"):""}<span>${esc(o.note)}</span>${c?`<em>${esc(c.name)}</em>`:""}</button>`; }).join("");
+    ns.querySelectorAll("[data-ns]").forEach(b=>b.onpointerdown=e=>{ e.preventDefault(); const o=list[+b.dataset.ns]; f.note=o.note; fn.value=o.note; ns.hidden=true;
+      if(!f.categoryId && catById(o.t.categoryId)){ f.categoryId=o.t.categoryId; markCat(); toast("Đã chọn hạng mục "+catById(o.t.categoryId).name); } }); };
+  fn.oninput=()=>{ f.note=fn.value; showSugg(); };
+  fn.onblur=()=>setTimeout(()=>{ ns.hidden=true; },150);
   const cancel=$("#fCancel"); if(cancel) cancel.onclick=()=>{ S.editId=null; S.form=null; setTab("book"); };
   const cancelFab=$("#fCancelFab"); if(cancelFab) cancelFab.onclick=()=>cancel.click();
   // lưu từ nút nổi: nếu báo lỗi thì cuộn tới chỗ báo lỗi cho thấy
