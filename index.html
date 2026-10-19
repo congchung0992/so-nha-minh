@@ -144,7 +144,7 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .catsearch .input{padding-left:38px;border-radius:14px;background:var(--surface-2);border-color:transparent}
 .catbtn[hidden]{display:none!important}
 .mergebox{display:flex;flex-direction:column;gap:8px;padding:10px;margin:2px 0 8px;border-radius:12px;background:var(--surface-2)}
-/* chi tiêu 6 tháng: mỗi tháng một thanh ngang chia màu */
+/* chi tiêu 12 tháng: mỗi tháng một thanh ngang chia màu */
 .trend{display:flex;flex-direction:column;gap:8px}
 .trow{display:grid;grid-template-columns:30px 1fr 64px;align-items:center;gap:8px;background:none;border:0;padding:0;color:inherit;text-align:left}
 .trow .tm{font-size:12.5px;color:var(--muted);font-weight:700}
@@ -671,9 +671,9 @@ function homeView(){
   bindCatDetail();
 }
 
-/* bấm một hạng mục ở biểu đồ 6 tháng → chi của hạng mục đó qua từng tháng; bấm tháng để xem các khoản */
+/* bấm một hạng mục ở biểu đồ 12 tháng → chi của hạng mục đó qua từng tháng; bấm tháng để xem các khoản */
 function catTrendView(cid){
-  const c=catById(cid), N=6, ym=ymOf(todayStr()); const months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(ym,-i));
+  const c=catById(cid), N=12, ym=ymOf(todayStr()); const months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(ym,-i));
   const inCat=t=>t.kind==="expense" && t.categoryId===cid && isRealFlow(t);
   const per=months.map(m=>{ const l=S.txs.filter(t=>inCat(t)&&ymOf(t.date)===m); return {m,l,sum:l.reduce((s,t)=>s+(+t.amount),0)}; });
   const total=per.reduce((s,p)=>s+p.sum,0), withM=per.filter(p=>p.sum>0).length||1, max=Math.max(1,...per.map(p=>p.sum));
@@ -693,11 +693,11 @@ function catTrendView(cid){
   document.querySelectorAll("[data-ctm]").forEach(b=>b.onclick=()=>{ S.catTrendM=b.dataset.ctm; render(); });
   bindTxRows();
 }
-/* ---------- chi tiêu 6 tháng: theo hạng mục / cố định – phát sinh ---------- */
+/* ---------- chi tiêu 12 tháng: theo hạng mục / cố định – phát sinh ---------- */
 const FIXED_RE=/thue nha|tien nha|\bdien\b|tien dien|\bnuoc\b|tien nuoc|internet|wifi|truyen hinh|dien thoai|hoc phi|bao hiem|lai vay|tra gop|gui xe|\bgas\b|phi quan ly|dich vu sinh hoat/;
 const isFixedCat = c => !!c && (c.fixed===true || (c.fixed!==false && FIXED_RE.test(strip(c.name)+" | "+strip(c.parent||""))));
 function spendTrendCard(ym){
-  const N=6, months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(ym,-i));
+  const N=12, months=[]; for(let i=N-1;i>=0;i--) months.push(shiftYm(ym,-i));
   const mode=S.homeMode||"cat";
   const per=months.map(m=>{ const rows=byCategory(m,"expense"); const tot=rows.reduce((s,r)=>s+r[1],0); let fix=0; rows.forEach(([id,v])=>{ if(isFixedCat(catById(id))) fix+=v; }); return {m,rows:Object.fromEntries(rows),tot,fix}; });
   const grand=per.reduce((s,p)=>s+p.tot,0);
