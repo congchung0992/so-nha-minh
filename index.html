@@ -202,8 +202,11 @@ nav.tabs button svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-
 nav.tabs button[aria-current="page"]{color:var(--accent)}
 nav.tabs .add{transform:none}
 nav.tabs .add span.plus{margin-top:-30px}
-nav.tabs button:not(.add) svg{padding:3px clamp(8px,3vw,14px);box-sizing:content-box;border-radius:999px;transition:background-color .2s}
-nav.tabs button[aria-current="page"]:not(.add) svg{background:var(--accent-soft)}
+/* tab đang chọn: tô nền đậm cả ô (icon + chữ), mỗi tab một màu */
+nav.tabs .in-tabs{padding:5px}
+nav.tabs button:not(.add){border-radius:20px;margin:0 2px;transition:background-color .25s,color .2s,box-shadow .25s}
+nav.tabs button[data-tab="home"]{--tc:#0f8f8a} nav.tabs button[data-tab="book"]{--tc:#2f6bd0} nav.tabs button[data-tab="report"]{--tc:#7b4fd6} nav.tabs button[data-tab="more"]{--tc:#e07a2c}
+nav.tabs button[aria-current="page"]:not(.add){background:var(--tc);color:#fff;box-shadow:0 4px 12px color-mix(in srgb,var(--tc) 40%,transparent)}
 nav.tabs .add span.plus{width:56px;height:56px;border-radius:50%;background:linear-gradient(160deg,var(--brand),var(--brand-2));color:#fff;display:grid;place-items:center;box-shadow:0 6px 18px rgba(15,107,120,.35);border:4px solid var(--surface)}
 nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 
@@ -384,7 +387,7 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 @media (hover:hover){.btn:hover:not(:disabled){box-shadow:0 6px 18px rgba(15,107,120,.28)} .tx:hover,.menuitem:hover{opacity:.82} .wcard:hover{transform:translateY(-2px)}}
 /* thanh tab: icon đang chọn nhô lên, nút + xoay khi bấm */
 nav.tabs button svg{transition:transform .3s var(--ease-spring)}
-nav.tabs button[aria-current="page"]:not(.add) svg{transform:scale(1.04)}
+nav.tabs button[aria-current="page"]:not(.add) svg{transform:scale(1.06)}
 nav.tabs .add span.plus{transition:transform .3s var(--ease-spring),box-shadow .3s}
 nav.tabs .add:active span.plus{transform:scale(.9) rotate(90deg)}
 nav.tabs .add[aria-current="page"] span.plus{box-shadow:0 8px 24px rgba(15,107,120,.45)}
