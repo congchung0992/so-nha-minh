@@ -1414,7 +1414,7 @@ function householdCard(){
       <div class="row between" style="flex-wrap:wrap"><b class="num" style="font-size:calc(var(--fs-lg) * 1.5);letter-spacing:.22em;user-select:all">${esc(h.join_code||"")}</b><span class="row"><button class="chip" id="copyCode">Sao chép lời mời</button>${owner?`<button class="chip" id="rotCode">Đổi mã</button>`:""}</span></div>
       <span class="small muted">Người nhà mở link app, tạo tài khoản rồi nhập mã này để cùng ghi chung sổ.</span>
     </div>
-    <div class="list-plain">${S.members.map(m=>`<div class="menuitem" style="padding:8px 0">${icoHTML(m.role==="owner"?"star":"family","sm")}<div class="mid"><div style="font-weight:600">${esc(m.display_name||"Người nhà")}${m.user_id===S.uid?" (bạn)":""}</div><div class="s">${m.role==="owner"?"Chủ sổ":"Thành viên"}</div></div></div>`).join("")}</div>
+    <div class="list-plain">${S.members.map(m=>`<div class="menuitem" style="padding:8px 0">${icoHTML(personIcon(m.display_name),"sm")}<div class="mid"><div style="font-weight:600">${esc(m.display_name||"Người nhà")}${m.user_id===S.uid?" (bạn)":""}</div><div class="s">${m.role==="owner"?"Chủ sổ":"Thành viên"}</div></div></div>`).join("")}</div>
     <div class="field"><label for="myName">Tên hiển thị của bạn</label><input class="input" id="myName" maxlength="30" value="${esc(me?.display_name||"")}"></div>
   </section>`;
 }
