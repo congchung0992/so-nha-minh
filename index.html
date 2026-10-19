@@ -481,7 +481,7 @@ const NAME_HINTS = [
   [/phu kien|trang suc|dong ho/,"gem"],[/tien vao|nhan tien/,"inflow"],
   [/sua chua nha|sua nha|bao duong/,"tools"],[/gui xe|xe may|sua xe/,"bike"],[/dien thoai|cuoc|\bsim\b|nap the/,"phone"],
   [/an uong|\bcom\b|nha hang|an sang|an trua|an toi|an vat/,"food"],[/di cho|^cho\b|sieu thi|thuc pham/,"market"],[/cafe|ca phe|tra sua|do uong/,"coffee"],
-  [/tien dien|^dien\b/,"bolt"],[/nuoc/,"drop"],[/internet|wifi/,"wifi"],[/truyen hinh|netflix|youtube/,"tv"],[/tien nha|thue nha|nha cua/,"home"],
+  [/tien dien|^dien\b/,"bolt"],[/nuoc/,"drop"],[/internet|wifi|tien mang|cuoc mang|\bmang\b|fpt|viettel net|vnpt/,"wifi"],[/truyen hinh|netflix|youtube/,"tv"],[/tien nha|thue nha|nha cua/,"home"],
   [/xang/,"fuel"],[/taxi|grab|o to|xe hoi/,"car"],[/xe buyt|di lai|\btau\b|ve xe/,"bus"],[/hoc|truong|sach/,"school"],
   [/con cai|tre em|\bbe\b|bim|sua bot/,"kids"],[/suc khoe|thuoc|kham|benh/,"health"],[/quan ao|thoi trang|giay dep/,"shirt"],
   [/mua sam|do dung/,"bag"],[/lam dep|my pham|cat toc|spa/,"beauty"],[/hieu hi|dam cuoi|ma chay|mung cuoi|phong bi/,"envelope"],[/giai tri|xem phim|ca nhac|hoa nhac|concert|nhac hoi|show dien|\bphim\b|karaoke/,"ticket"],
@@ -1023,11 +1023,15 @@ function parseSpoken(text){
   if (take(/\bhom kia\b/)) out.date=dateAdd(todayStr(),-2);
   else if (take(/\b(hom|toi|sang|trua|chieu) qua\b/)) out.date=dateAdd(todayStr(),-1);
   else take(/\b(hom|sang|trua|chieu|toi) nay\b/);
-  let m=/\b(?:ngay\s*)?(\d{1,2})\s*(?:\/|thang)\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr)\b)/.exec(t) || /\bngay\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr)\b)/.exec(t);
+  let m=/\bngay\s*(\d{1,2})\s*(?:\/|thang)\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr)\b)/.exec(t) || /\b(\d{1,2})\/(\d{1,2})\b/.exec(t) || /\bngay\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr)\b)/.exec(t);
   if (m){ const now=new Date(), d=+m[1], mo=m[2]?+m[2]:now.getMonth()+1;
     if(d>=1&&d<=31&&mo>=1&&mo<=12){ const y=now.getFullYear(), ds=y+"-"+pad(mo)+"-"+pad(d); out.date = ds>todayStr()? (y-1)+"-"+pad(mo)+"-"+pad(d) : ds; mask(m.index,m.index+m[0].length); } }
   // "chia 3 tháng", "chia đều cho 6 tháng", "trong 3 tháng" → chia nhiều tháng
-  if ((m=/\b(?:chia(?: deu)?(?: cho| ra| lam)?|trong)\s*(\d{1,2})\s*thang\b/.exec(t))){ const n=+m[1]; if(n>=2&&n<=36) out.split=n; mask(m.index,m.index+m[0].length); }
+  // "chia 3 tháng", "gói 6 tháng", "trong ba tháng", "một năm" / "cả năm" (12), "nửa năm" (6), "một quý" (3), "hai năm" (24)
+  const NW={mot:1,hai:2,ba:3,bon:4,tu:4,nam:5,sau:6,bay:7,tam:8,chin:9,muoi:10,"muoi mot":11,"muoi hai":12,"hai muoi bon":24};
+  const PER=/\b(?:(?:chia(?: deu)?(?: cho| ra| lam)?|trong|cho|goi|tra truoc|dong)\s+)?(\d{1,2}|muoi hai|muoi mot|hai muoi bon|mot|hai|ba|bon|tu|nam|sau|bay|tam|chin|muoi|ca|nua)\s+(thang|nam|quy)\b/;
+  if ((m=PER.exec(t))){ const q=m[1], unit=m[2]; const k = q==="ca" ? 1 : q==="nua" ? .5 : /^\d+$/.test(q) ? +q : NW[q], n = k ? Math.round(k*(unit==="nam"?12:unit==="quy"?3:1)) : 0;
+    if (n){ if(n>=2&&n<=36){ out.split=n; mask(m.index,m.index+m[0].length); } } }
   // số tiền
   const a=parseAmountText(t); if(a){ out.amount=a.v; mask(a.s,a.e); }
   take(/\b(nghin dong|dong|vnd)\b/);
@@ -1054,6 +1058,8 @@ function parseSpoken(text){
     if (icon!=="other" && ci===icon) sc+=3;
     else if (TRANSPORT.includes(icon) && TRANSPORT.includes(ci)) sc+=2;                 // "đổ xăng" → Đi lại khi không có mục Xăng
     if (sc) score[c.id]=(score[c.id]||0)+sc; });
+  // "sữa" (cho bé) và "sửa" (xe, nhà) giống nhau khi bỏ dấu: nhìn câu gốc để phân biệt
+  if (/sữa/i.test(orig) && !/sửa/i.test(orig)) S.cats.forEach(c=>{ if(/sửa/i.test(c.name)) score[c.id]=(score[c.id]||0)-5; else if(["kids","baby"].includes(catIconKey(c))) score[c.id]=(score[c.id]||0)+3; });
   S.txs.forEach(x=>{ const n=strip(x.note||""); if(!n||!x.categoryId) return; const nw=n.split(" ").filter(y=>y.length>2); if(!nw.length) return;
     const hit=nw.filter(y=>words.includes(y)).length/nw.length; if(hit>=.6) score[x.categoryId]=(score[x.categoryId]||0)+Math.min(1,hit)*.5; });
   Object.keys(score).forEach(id=>{ if(score[id]>12) score[id]=12; });
