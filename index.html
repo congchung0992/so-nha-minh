@@ -297,7 +297,11 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .cgroup{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px 8px 0;margin:4px 0;border:0;border-radius:14px;background:none;color:inherit;text-align:left;transition:background-color .15s}
 .cgroup[aria-expanded="true"]{background:var(--surface-2)}
 .cgroup{padding-left:26px}   /* thẳng hàng icon với dòng hạng mục (có nút kéo ⠿ phía trước) */
-.cgroup .t{flex:1;min-width:0;display:flex;flex-direction:column;font-weight:700}
+.cgroup .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-weight:700}
+.cgroup .ib{border:0;background:none;padding:0;border-radius:14px;flex:none}
+.cgroup .ginput{font-weight:700;min-height:40px;padding:7px 10px}
+.cgroup .t [data-cgroup]{cursor:pointer;padding-left:2px}
+.cgroup .chev{border:0;padding:0;cursor:pointer}
 .cgroup .t .small{font-weight:500}
 .cgroup .chev{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--surface-2);color:var(--muted);flex:none}
 .cgroup .chev svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
@@ -1193,8 +1197,9 @@ function catsView(){
     <div class="dropout" data-drop="out" hidden>Thả vào đây để tách khỏi nhóm</div>
     ${unused.length?`<button class="btn ghost" id="cPurge">Xoá ${unused.length} hạng mục chưa dùng</button>`:""}
     <div class="list-plain">${groups.map(([g,kids])=>{ if(kids.length===1) return catRow(kids[0],false);
-      const open=!!S.catOpen?.[g]||kids.some(c=>c.id===S.pickFor||c.id===S.mergeCat), tot=kids.reduce((s,c)=>s+(cnt[c.id]||0),0), head=kids.find(c=>!c.parent)||kids[0], gIco=guessIcon(g)!=="other"?guessIcon(g):catIconKey(head);
-      return `<div><button class="cgroup" data-cgroup="${esc(g)}" data-drop="g:${esc(g)}" aria-expanded="${open}">${icoHTML(gIco)}<span class="t">${esc(g)}<span class="small muted">${kids.length} mục · ${tot} khoản</span></span><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button>${open?`<div class="ckids">${kids.map(c=>catRow(c,true)).join("")}</div>`:""}</div>`; }).join("")}</div>
+      const open=!!S.catOpen?.[g]||kids.some(c=>c.id===S.pickFor||c.id===S.mergeCat), tot=kids.reduce((s,c)=>s+(cnt[c.id]||0),0), main=kids.find(c=>!c.parent&&c.name===g), gIco=main?catIconKey(main):guessIcon(g)!=="other"?guessIcon(g):catIconKey(kids[0]);
+      // dòng nhóm sửa được: chạm icon để đổi icon nhóm, sửa tên nhóm ngay trong ô (các mục con đổi theo)
+      return `<div><div class="cgroup" data-drop="g:${esc(g)}" aria-expanded="${open}"><button class="ib" data-pickfor="g:${esc(main?.id||"")}" data-gname="${esc(g)}" aria-label="Đổi icon nhóm">${icoHTML(gIco)}</button><span class="t"><input class="input ginput" data-grename="${esc(g)}" value="${esc(g)}" maxlength="40" aria-label="Tên nhóm"><span class="small muted" data-cgroup="${esc(g)}">${kids.length} mục · ${tot} khoản</span></span><button class="chev" data-cgroup="${esc(g)}" aria-label="${open?"Thu gọn":"Mở"} nhóm"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></div>${S.pickFor==="g:"+(main?.id||"")&&S.pickGroup===g?picker(gIco):""}${open?`<div class="ckids">${kids.map(c=>catRow(c,true)).join("")}</div>`:""}</div>`; }).join("")}</div>
   </section>
   ${sugg.length?`<section class="card"><h2>Gợi ý gộp hạng mục trùng</h2><p class="small muted" style="margin:0">Các cặp tên gần giống nhau. Gộp hạng mục ít khoản vào hạng mục nhiều khoản; các khoản được chuyển sang, hạng mục cũ bị xoá.</p>
     <div class="list-plain">${sugg.map(([a,b])=>`<div class="menuitem" style="padding:8px 0"><div class="mid"><div style="font-weight:600">${esc(a.name)} <span class="muted small">(${cnt[a.id]||0})</span> → ${esc(b.parent?b.parent+" › "+b.name:b.name)} <span class="muted small">(${cnt[b.id]||0})</span></div></div><button class="chip" data-sugg="${esc(a.id)}|${esc(b.id)}">Gộp</button></div>`).join("")}</div></section>`:""}
@@ -1207,12 +1212,17 @@ function catsView(){
   document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{S.catKind=b.dataset.k; S.pickFor=null; catsView();});
   bindCatDrag();
   document.querySelectorAll("[data-cgroup]").forEach(b=>b.onclick=()=>{ const g=b.dataset.cgroup; S.catOpen={...S.catOpen,[g]:!S.catOpen?.[g]}; if(!S.catOpen[g]){ S.pickFor=null; S.mergeCat=null; } catsView(); });
+  document.querySelectorAll("[data-pickfor]").forEach(b=>{ if(b.dataset.gname!==undefined) b.addEventListener("click",e=>{ if(b.dataset.pickfor==="g:"){ e.stopImmediatePropagation(); toast("Nhóm này chưa có mục chung để lưu icon"); return; } S.pickGroup=b.dataset.gname; }, true); });
   document.querySelectorAll("[data-pickfor]").forEach(b=>b.onclick=()=>{ S.pickFor = S.pickFor===b.dataset.pickfor?null:b.dataset.pickfor; catsView(); });
   document.querySelectorAll("[data-pick]").forEach(b=>b.onclick=async()=>{ const key=b.dataset.pick;
     if (S.pickFor==="__new"){ S.newIcon=key; S.pickFor=null; const v=$("#cNew").value; catsView(); $("#cNew").value=v; return; }
-    const c=catById(S.pickFor); S.pickFor=null; if(!c) return;
+    const c=catById(String(S.pickFor).replace(/^g:/,"")); S.pickFor=null; S.pickGroup=null; if(!c) return;
     try{ await S.db.doc("categories/"+c.id).set({...strip0(c),icon:key}); toast("Đã đổi icon"); }catch(e){handleWriteErr(e)} catsView(); });
-  document.querySelectorAll("[data-rename]").forEach(inp=>inp.onchange=async()=>{ const n=inp.value.trim(); const c=catById(inp.dataset.rename); if(!n||!c||n===c.name){inp.value=c?.name||"";return} try{ await S.db.doc("categories/"+c.id).set({...strip0(c),name:n,icon:catIconKey(c)}); toast("Đã đổi tên"); }catch(e){handleWriteErr(e)} });
+  document.querySelectorAll("[data-rename]").forEach(inp=>inp.onchange=async()=>{ const n=inp.value.trim(); const c=catById(inp.dataset.rename); if(!n||!c||n===c.name){inp.value=c?.name||"";return}
+    // đổi tên mục chung của một nhóm = đổi tên cả nhóm
+    if (!c.parent && S.cats.some(x=>x.kind===c.kind&&x.parent===c.name)) return renameGroup(c.kind,c.name,n,inp);
+    try{ await S.db.doc("categories/"+c.id).set({...strip0(c),name:n,icon:catIconKey(c)}); toast("Đã đổi tên"); }catch(e){handleWriteErr(e)} });
+  document.querySelectorAll("[data-grename]").forEach(inp=>{ inp.onchange=()=>renameGroup(k,inp.dataset.grename,inp.value.trim(),inp); inp.onkeydown=e=>{ if(e.key==="Enter") inp.blur(); }; });
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{ if(b.dataset.armed){ try{ await S.db.doc("categories/"+b.dataset.del).delete(); toast("Đã xoá hạng mục"); }catch(e){handleWriteErr(e)} } else { b.dataset.armed="1"; b.textContent="Xoá?"; } });
   const cn=$("#cNew"); cn.oninput=()=>{ if(!S.newIcon){ const g=guessIcon(cn.value); const box=$('[data-pickfor="__new"]'); box.innerHTML=icoHTML(g); } };
   $("#cAdd").onclick=async()=>{ const n=cn.value.trim(); const err=$("#cErr"); err.textContent=""; if(!n){err.textContent="Nhập tên hạng mục.";return}
@@ -1227,6 +1237,19 @@ function catsView(){
   document.querySelectorAll("[data-sugg]").forEach(b=>b.onclick=async()=>{ const [a,c]=b.dataset.sugg.split("|"); const src=catById(a), dst=catById(c); if(!src||!dst) return;
     if(!b.dataset.armed){ b.dataset.armed="1"; b.textContent="Bấm lần nữa"; return; }
     b.disabled=true; await mergeCategory(src,dst); });
+}
+/* đổi tên nhóm: mục chung (nếu có) đổi tên, mọi mục con đổi "nhóm cha" theo */
+async function renameGroup(kind, oldName, n, inp){
+  if (!n || n===oldName){ if(inp) inp.value=oldName; return; }
+  const main=S.cats.find(c=>c.kind===kind&&!c.parent&&c.name===oldName), kids=S.cats.filter(c=>c.kind===kind&&c.parent===oldName);
+  if (S.cats.some(c=>c.kind===kind&&c!==main&&!kids.includes(c)&&(strip(c.name)===strip(n)||strip(c.parent||"")===strip(n)))){ toast(`Đã có hạng mục / nhóm tên “${n}”`); if(inp) inp.value=oldName; return; }
+  try{
+    if (main) await S.db.doc("categories/"+main.id).set({...strip0(main),name:n,icon:catIconKey(main)});
+    for (const c of kids) await S.db.doc("categories/"+c.id).set({...strip0(c),parent:n,icon:catIconKey(c)});
+    if (S.catOpen?.[oldName]) S.catOpen={...S.catOpen,[n]:true};
+    toast(`Đã đổi tên nhóm thành “${n}”`);
+  }catch(e){ handleWriteErr(e); }
+  catsView();
 }
 /* kéo thả hạng mục giữa các nhóm: giữ nút ⠿ rồi kéo; thả lên dòng nhóm / mục trong nhóm → vào nhóm đó,
    thả lên một hạng mục đứng riêng → gom thành nhóm mang tên mục đó, thả vào ô "tách khỏi nhóm" → đứng riêng */
