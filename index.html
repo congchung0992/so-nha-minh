@@ -290,6 +290,10 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .selrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
 .selrow .mid{flex:1;min-width:0}
 .selrow select,.selrow input{width:100%;border:0;background:transparent;font-weight:600;padding:4px 0;min-height:32px;outline:none}
+/* iPhone: bỏ kiểu mặc định của ô chọn để chữ thẳng hàng với nhãn, mũi tên tự vẽ bên phải */
+.selrow select{-webkit-appearance:none;appearance:none;padding-right:24px;text-indent:0;background:no-repeat right 2px center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a94a0' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")}
+.datebox{position:relative;display:flex;align-items:center;min-height:32px;padding:4px 24px 4px 0;font-weight:600;cursor:pointer;background:no-repeat right 2px center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a94a0' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")}
+.datebox input{position:absolute;inset:0;width:100%;height:100%;opacity:0;-webkit-appearance:none;appearance:none;cursor:pointer}
 .input,select.input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:11px 12px;min-height:44px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:360px){.catgrid{grid-template-columns:repeat(3,1fr)}}
@@ -1223,6 +1227,8 @@ function groupedCatGrid(cats, attr, sel){
 }
 // sau khi lọc tìm kiếm: ẩn nhóm không còn mục nào
 const syncCatSections = root => root.querySelectorAll(".catsec").forEach(sec=>{ sec.hidden=![...sec.querySelectorAll(".catbtn")].some(b=>!b.hidden); });
+// "Hôm nay · Thứ hai, 19/10/2026" — hiện ngày kiểu Việt Nam, căn trái (ô ngày gốc của iPhone căn giữa, nhìn lệch)
+const dateText = d => { const rel = d===todayStr()?"Hôm nay · ":d===dateAdd(todayStr(),-1)?"Hôm qua · ":""; return rel+weekday(d)+", "+viDate(d); };
 function blankForm(){ const ws=sortedWallets(); return {kind:"expense",amount:"",categoryId:"",walletId:ws[0]?.id||"",toWalletId:ws[1]?.id||"",date:todayStr(),note:""}; }
 function formView(){
   if (!S.form) S.form = blankForm();
@@ -1241,7 +1247,7 @@ function formView(){
     <div class="quick">${[20000,50000,100000,200000,500000,1000000].map(n=>`<button class="chip" data-q="${n}">${fmt(n)}</button>`).join("")}<button class="chip" data-x="000">×1.000</button></div>
   </section>
   <section class="card" style="gap:0">
-    <div class="selrow" style="border-top:0">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><input type="date" id="fDate" value="${esc(f.date)}"></div></div>
+    <div class="selrow" style="border-top:0">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><label class="datebox"><span id="fDateTxt">${dateText(f.date)}</span><input type="date" id="fDate" value="${esc(f.date)}" aria-label="Chọn ngày"></label></div></div>
     <div class="selrow">${icoHTML("pen","sm")}<div class="mid"><div class="flabel">Ghi chú</div><input id="fNote" maxlength="200" placeholder="Ví dụ: chợ sáng" value="${esc(f.note)}" autocomplete="off" enterkeyhint="done"><div class="notesugg" id="noteSugg" hidden></div></div></div>
     ${f.kind==="transfer" ? `
       <div class="selrow">${icoHTML("transfer","sm")}<div class="mid"><div class="flabel">Từ ví</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
@@ -1282,7 +1288,7 @@ function formView(){
   const fsp=$("#fSplit"); if(fsp) fsp.onchange=()=>{ f.split=+fsp.value||1; formView(); };
   const fw=$("#fWallet"); if(fw) fw.onchange=()=>{ f.walletId=fw.value; formView(); };
   const ft=$("#fTo"); if(ft) ft.onchange=()=>{ f.toWalletId=ft.value; formView(); };
-  $("#fDate").onchange=e=>{ f.date=e.target.value; };
+  $("#fDate").onchange=e=>{ f.date=e.target.value||todayStr(); $("#fDateTxt").textContent=dateText(f.date); };
   const fn=$("#fNote"), ns=$("#noteSugg");
   // gõ ghi chú → gợi ý ghi chú cũ; chọn gợi ý thì tự chọn luôn hạng mục lần trước (nếu chưa chọn)
   const showSugg=()=>{ const list=f.kind==="transfer"?[]:noteSuggestions(f.kind,fn.value); ns.hidden=!list.length;
