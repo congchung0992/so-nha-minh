@@ -243,6 +243,7 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .vneed.shake{animation:vshake .4s}
 @keyframes vshake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 .vprev .miss span,.vprev .miss b{color:var(--expense)}
+.vamt{width:150px;text-align:right;border:1px solid var(--expense);border-radius:10px;padding:4px 8px;background:var(--surface);font-weight:700}
 .vmic{flex:none;align-self:center;width:76px;height:76px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .vmic svg{width:34px;height:34px}
 .vmic.on{background:var(--expense);color:#fff;animation:micpulse 1.2s ease-in-out infinite}
@@ -997,7 +998,7 @@ function parseAmountText(t){
   let m; const all=[];
   while ((m=re.exec(t))){
     // "tháng 9", "ngày 15" (đứng trước) hay "2 người", "3 ly" (đứng sau) là số lượng, không phải tiền
-    if (/\b(thang|ngay)\s*$/.test(t.slice(0,m.index)) || /^\s*(nguoi|lan|cai|chiec|ly|coc|bat|to|suat|phan|hop|goi|kg|lit|qua|cuon|doi|bo)\b/.test(t.slice(m.index+m[1].length))) { re.lastIndex=m.index+m[1].length; continue; }
+    if ((/^\d{1,2}$/.test(m[1]) && +m[1]<=31 && /\b(thang|ngay)\s*$/.test(t.slice(0,m.index))) || /^\s*(nguoi|lan|cai|chiec|ly|coc|bat|to|suat|phan|hop|goi|kg|lit|qua|cuon|doi|bo)\b/.test(t.slice(m.index+m[1].length))) { re.lastIndex=m.index+m[1].length; continue; }
     const raw=m[1]; let n = /^\d{1,3}([.,]\d{3})+$/.test(raw) ? Number(raw.replace(/[.,]/g,"")) : Number(raw.replace(",","."));
     if (!isFinite(n)) continue;
     const u=m[2]||"", mul = u==="ty"?1e9 : (u==="trieu"||u==="tr"||u==="cu")?1e6 : (u==="nghin"||u==="ngan"||u==="k")?1e3 : 1;
@@ -1011,7 +1012,7 @@ function parseAmountText(t){
   return all.find(x=>x.unit) || all[0] || null;
 }
 function parseSpoken(text){
-  const orig=String(text||"").replace(/\s+/g," ").trim();
+  const orig=String(text||"").normalize("NFC").replace(/\s+/g," ").trim();
   // bản không dấu, giữ đúng vị trí từng ký tự để cắt được cả câu gốc
   let t=[...orig].map(ch=>(ch.trim()? strip(ch) : " ")||ch).join("");
   if (t.length!==orig.length) t=strip(orig);
@@ -1096,20 +1097,21 @@ function voiceSheet(){
     <div class="vfoot"><div class="vneed" id="vNeed" hidden></div><div class="btnrow"><button class="btn ghost" id="vApply" disabled>Sửa thêm</button><button class="btn" id="vSave" disabled>Lưu</button></div></div></div>`;
   document.body.appendChild(box);
   const txt=$("#vText"), st=$("#vStatus"), prev=$("#vPrev"), ap=$("#vApply"), sv=$("#vSave"), need=$("#vNeed"), micb=$("#vMic");
-  let rec=null, parsed=null, pickedCat=null, lastText="";
+  let rec=null, parsed=null, pickedCat=null, typedAmt=0, lastText="";
   const show=()=>{ if(!box.isConnected) return; const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
-    if (v!==lastText){ pickedCat=null; lastText=v; }
-    parsed=parseSpoken(v); const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
+    if (v!==lastText){ pickedCat=null; typedAmt=0; lastText=v; }
+    parsed=parseSpoken(v); if(!parsed.amount && typedAmt) parsed.amount=typedAmt; const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
     const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
     prev.hidden=false;
     prev.innerHTML=`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
-      <div class="${parsed.amount?"":"miss"}"><span>Số tiền</span><b class="num">${parsed.amount?fmt(parsed.amount)+" đ":"Chưa nghe rõ, sửa chữ trong ô"}</b></div>
+      <div class="${parsed.amount?"":"miss"}"><span>Số tiền</span>${parsed.amount&&!typedAmt?`<b class="num">${fmt(parsed.amount)} đ</b>`:`<input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${typedAmt?fmt(typedAmt):""}" aria-label="Số tiền">`}</div>
       ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div class="${c?"":"miss"}"><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"Bắt buộc chọn ↓"}</b></div>`}
       <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
       ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}
       ${parsed.split>1&&parsed.kind!=="transfer"?`<div><span>Chia</span><b>${parsed.split} tháng: ${splitParts(parsed.amount||0,parsed.date,parsed.split,"").map(x=>"T"+Number(x.date.slice(5,7))).join(", ")}</b></div>`:""}
 `;
+    const va=$("#vAmt"); if(va){ va.oninput=()=>{ const n=parseAmount(va.value); typedAmt=n; va.value=n?fmt(n):""; parsed.amount=n||undefined; va.closest(".miss,div")?.classList.toggle("miss",!n); checkNeed(); }; }
     renderCats(parsed.kind, autoCat, parsed.cands||[]); checkNeed(); };
   // bắt buộc đủ số tiền + hạng mục (+ ví) mới cho lưu; báo rõ còn thiếu gì
   const buildForm=()=>{ const f=S.form||blankForm();
@@ -1123,7 +1125,7 @@ function voiceSheet(){
     return m; };
   const checkNeed=()=>{ const m=missing(); sv.classList.toggle("off",m.length>0); sv.disabled=!parsed;
     need.hidden=!parsed||!m.length;
-    need.innerHTML=m.length?`⚠ Chưa có <b>${m.join(", ")}</b>. ${m.includes("hạng mục")?"Chạm một hạng mục bên dưới để chọn.":m.includes("số tiền")?"Nói lại hoặc sửa chữ trong ô, ví dụ “150k”.":"Bấm “Sửa thêm” để chọn."}`:""; };
+    need.innerHTML=m.length?`⚠ Chưa có <b>${m.join(", ")}</b>. ${m.includes("hạng mục")?"Chạm một hạng mục bên dưới để chọn.":m.includes("số tiền")?"Gõ số tiền vào dòng Số tiền ở trên.":"Bấm “Sửa thêm” để chọn."}`:""; };
   sv.onclick=async()=>{ const m=missing();
     if (m.length){ need.classList.remove("shake"); void need.offsetWidth; need.classList.add("shake"); if(m.includes("hạng mục")) cbox.scrollIntoView({block:"start",behavior:"smooth"}); return; }
     sv.disabled=true; sv.textContent="Đang lưu…";
