@@ -269,9 +269,7 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .vprev > div:not(.vcats):not(.vsplit){display:flex;justify-content:space-between;gap:12px}
 .vcats{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line);margin-top:2px} .vcats > span{color:var(--muted)} .vprev span{color:var(--muted)} .vprev b{display:inline-flex;align-items:center;gap:6px;text-align:right;overflow-wrap:anywhere} .vprev i{color:var(--muted);font-weight:500}
 .ico.xs{width:22px;height:22px;border-radius:7px}
-.selrow.top{align-items:flex-start} .selrow.top > .ico{margin-top:4px}
-.splitchips{margin-top:6px;flex-wrap:wrap} .splitchips .chip{padding:4px 12px} .selrow .splitn{width:96px;text-align:center;border:1px solid var(--line);border-radius:999px;background:var(--surface);min-height:0;padding:4px 10px;font-weight:600}
-.splitprev{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 4px} .splitprev span{white-space:nowrap}
+.splitsum{margin-top:2px}
 .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .chip.fq{display:inline-flex;align-items:center;gap:6px;padding:4px 12px 4px 4px}
 .chip.fq[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 18%,var(--surface));border-color:var(--c);color:inherit}
@@ -1248,9 +1246,9 @@ function formView(){
       <div class="selrow">${icoHTML("transfer","sm")}<div class="mid"><div class="flabel">Từ ví</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
       <div class="selrow">${icoHTML(walletIconKey(walletById(f.toWalletId)),"sm")}<div class="mid"><div class="flabel">Sang ví</div><select id="fTo">${opt(f.toWalletId)}</select></div></div>`
     : `<div class="selrow">${icoHTML(walletIconKey(walletById(f.walletId)),"sm")}<div class="mid"><div class="flabel">${f.kind==="income"?"Vào ví":"Từ ví"}</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
-      <div class="selrow top">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Chia cho nhiều tháng <span class="muted">(tiền nhà, học phí, gói nhiều tháng…)</span></div>
-        <div class="quick splitchips">${[1,2,3,4,6,12].map(n=>`<button class="chip" data-split="${n}" aria-pressed="${(+f.split||1)===n}">${n===1?"Không chia":n+" tháng"}</button>`).join("")}<input class="chip splitn" id="fSplitN" inputmode="numeric" maxlength="2" placeholder="Số khác" value="${[1,2,3,4,6,12].includes(+f.split||1)?"":esc(f.split)}" aria-label="Số tháng khác"></div>
-        ${(+f.split||1)>1?`<div class="splitprev">${splitParts(Number(f.amount)||0,f.date,+f.split,f.note).map(x=>`<span><b>T${Number(x.date.slice(5,7))}/${x.date.slice(2,4)}</b> ${f.amount?fmt(x.amount):"–"}</span>`).join("")}</div><div class="small muted">Khi lưu sẽ tạo ${f.split} khoản, mỗi tháng một khoản (cùng ngày ${Number(f.date.slice(8))} hằng tháng), ghi chú thêm “(1/${f.split})”…</div>`:""}</div></div>`}
+      <div class="selrow">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Chia nhiều tháng</div>
+        <select id="fSplit">${[1,2,3,4,5,6,7,8,9,10,11,12,18,24,36].map(n=>`<option value="${n}" ${(+f.split||1)===n?"selected":""}>${n===1?"Không chia":n+" tháng"}</option>`).join("")}</select>
+        ${(+f.split||1)>1?(()=>{ const pt=splitParts(Number(f.amount)||0,f.date,+f.split,""), a=pt[0], z=pt[pt.length-1]; return `<div class="small muted splitsum">${f.split} khoản${f.amount?" × "+fmt(a.amount)+" đ":""} · T${Number(a.date.slice(5,7))}/${a.date.slice(2,4)} → T${Number(z.date.slice(5,7))}/${z.date.slice(2,4)}, ngày ${Number(f.date.slice(8))} hằng tháng</div>`; })():""}</div></div>`}
   </section>
   ${f.kind==="transfer" ? "" : `<section class="card">
     <div class="row between"><h2>Hạng mục</h2><button class="link" id="editCats">Sửa hạng mục</button></div>
@@ -1280,8 +1278,7 @@ function formView(){
   // Enter trên bàn phím (ô số tiền / ghi chú) = Lưu
   ["#fAmount","#fNote"].forEach(sel=>{ const el=$(sel); if(el) el.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); el.blur(); saveForm(); } }); });
   const ec=$("#editCats"); if(ec) ec.onclick=()=>{ S.catKind=f.kind==="income"?"income":"expense"; S.moreSub="cats"; S.backTo="add"; S.tab="more"; markTab("more"); render(); window.scrollTo(0,0); };
-  document.querySelectorAll("[data-split]").forEach(b=>b.onclick=()=>{ f.split=+b.dataset.split; formView(); });
-  const sn=$("#fSplitN"); if(sn) sn.onchange=()=>{ const n=parseInt(sn.value,10); f.split=n>=2&&n<=36?n:1; formView(); };
+  const fsp=$("#fSplit"); if(fsp) fsp.onchange=()=>{ f.split=+fsp.value||1; formView(); };
   const fw=$("#fWallet"); if(fw) fw.onchange=()=>{ f.walletId=fw.value; formView(); };
   const ft=$("#fTo"); if(ft) ft.onchange=()=>{ f.toWalletId=ft.value; formView(); };
   $("#fDate").onchange=e=>{ f.date=e.target.value; };
