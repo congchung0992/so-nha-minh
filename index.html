@@ -253,6 +253,9 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .tpl{flex:none;display:flex;align-items:center;gap:8px;max-width:220px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--c) 8%,var(--surface));text-align:left;color:inherit}
 .tpl > span:not(.ico){display:flex;flex-direction:column;min-width:0;line-height:1.25} .tpl b{font-weight:600;overflow-wrap:anywhere}
 .ico.xs{width:22px;height:22px;border-radius:7px}
+.selrow.top{align-items:flex-start} .selrow.top > .ico{margin-top:4px}
+.splitchips{margin-top:6px;flex-wrap:wrap} .splitchips .chip{padding:4px 12px} .selrow .splitn{width:96px;text-align:center;border:1px solid var(--line);border-radius:999px;background:var(--surface);min-height:0;padding:4px 10px;font-weight:600}
+.splitprev{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 4px} .splitprev span{white-space:nowrap}
 .datechips{margin-top:6px} .datechips .chip{padding:4px 12px}
 .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .chip.fq{display:inline-flex;align-items:center;gap:6px;padding:4px 12px 4px 4px}
@@ -957,6 +960,13 @@ function bookView(){
 /* ---------- Ghi chép ---------- */
 /* ---------- nhập nhanh (học theo MISA, Money Lover, Monefy…) ---------- */
 const dateAdd = (s,k) => { const [y,m,d]=s.split("-").map(Number); const x=new Date(y,m-1,d+k); return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate()); };
+// chia đều một khoản cho n tháng liên tiếp từ tháng của ngày ghi: làm tròn nghìn, phần lẻ dồn vào tháng cuối
+function splitParts(amount, date, n, note){
+  n=Math.max(1,Math.min(36,Math.round(n)||1)); const [y,m,d]=date.split("-").map(Number);
+  const each=n>1?Math.floor(amount/n/1000)*1000:amount;
+  return Array.from({length:n},(_,i)=>{ const mm=m-1+i, yy=y+Math.floor(mm/12), mo=mm%12+1, last=new Date(yy,mo,0).getDate();
+    return {date:yy+"-"+pad(mo)+"-"+pad(Math.min(d,last)), amount:i<n-1?each:amount-each*(n-1), note:n>1?((note||"").trim()?(note||"").trim()+" ":"")+`(${i+1}/${n})`:(note||"")}; });
+}
 const shortAmt = n => n>=1e6 ? (n/1e6).toFixed(n%1e6?1:0).replace(".",",")+"tr" : n>=1000 ? Math.round(n/1000)+"k" : fmt(n);
 // khoản hay lặp lại (cùng hạng mục + ghi chú + số tiền, ≥ 2 lần trong 4 tháng) → chạm một lần là điền sẵn cả form
 function quickTemplates(kind){
@@ -1016,6 +1026,8 @@ function parseSpoken(text){
   let m=/\b(?:ngay\s*)?(\d{1,2})\s*(?:\/|thang)\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr)\b)/.exec(t) || /\bngay\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr)\b)/.exec(t);
   if (m){ const now=new Date(), d=+m[1], mo=m[2]?+m[2]:now.getMonth()+1;
     if(d>=1&&d<=31&&mo>=1&&mo<=12){ const y=now.getFullYear(), ds=y+"-"+pad(mo)+"-"+pad(d); out.date = ds>todayStr()? (y-1)+"-"+pad(mo)+"-"+pad(d) : ds; mask(m.index,m.index+m[0].length); } }
+  // "chia 3 tháng", "chia đều cho 6 tháng", "trong 3 tháng" → chia nhiều tháng
+  if ((m=/\b(?:chia(?: deu)?(?: cho| ra| lam)?|trong)\s*(\d{1,2})\s*thang\b/.exec(t))){ const n=+m[1]; if(n>=2&&n<=36) out.split=n; mask(m.index,m.index+m[0].length); }
   // số tiền
   const a=parseAmountText(t); if(a){ out.amount=a.v; mask(a.s,a.e); }
   take(/\b(nghin dong|dong|vnd)\b/);
@@ -1090,11 +1102,12 @@ function voiceSheet(){
       <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
       ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}
+      ${parsed.split>1&&parsed.kind!=="transfer"?`<div><span>Chia</span><b>${parsed.split} tháng: ${splitParts(parsed.amount||0,parsed.date,parsed.split,"").map(x=>"T"+Number(x.date.slice(5,7))).join(", ")}</b></div>`:""}
 `;
     renderCats(parsed.kind, autoCat, parsed.cands||[]); checkNeed(); };
   // bắt buộc đủ số tiền + hạng mục (+ ví) mới cho lưu; báo rõ còn thiếu gì
   const buildForm=()=>{ const f=S.form||blankForm();
-    return {...f,kind:parsed.kind,date:parsed.date,amount:parsed.amount||"",note:parsed.note||"",
+    return {...f,kind:parsed.kind,date:parsed.date,amount:parsed.amount||"",note:parsed.note||"",split:parsed.kind==="transfer"?1:(parsed.split||1),
       categoryId:parsed.kind==="transfer"?"":(parsed.categoryId||""),
       walletId:parsed.walletId||f.walletId, toWalletId:parsed.toWalletId||f.toWalletId}; };
   const missing=()=>{ if(!parsed) return ["nội dung"]; const g=buildForm(), m=[];
@@ -1177,7 +1190,10 @@ function formView(){
     ${f.kind==="transfer" ? `
       <div class="selrow">${icoHTML("transfer","sm")}<div class="mid"><div class="flabel">Từ ví</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
       <div class="selrow">${icoHTML(walletIconKey(walletById(f.toWalletId)),"sm")}<div class="mid"><div class="flabel">Sang ví</div><select id="fTo">${opt(f.toWalletId)}</select></div></div>`
-    : `<div class="selrow">${icoHTML(walletIconKey(walletById(f.walletId)),"sm")}<div class="mid"><div class="flabel">${f.kind==="income"?"Vào ví":"Từ ví"}</div><select id="fWallet">${opt(f.walletId)}</select></div></div>`}
+    : `<div class="selrow">${icoHTML(walletIconKey(walletById(f.walletId)),"sm")}<div class="mid"><div class="flabel">${f.kind==="income"?"Vào ví":"Từ ví"}</div><select id="fWallet">${opt(f.walletId)}</select></div></div>
+      <div class="selrow top">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Chia cho nhiều tháng <span class="muted">(tiền nhà, học phí, gói nhiều tháng…)</span></div>
+        <div class="quick splitchips">${[1,2,3,4,6,12].map(n=>`<button class="chip" data-split="${n}" aria-pressed="${(+f.split||1)===n}">${n===1?"Không chia":n+" tháng"}</button>`).join("")}<input class="chip splitn" id="fSplitN" inputmode="numeric" maxlength="2" placeholder="Số khác" value="${[1,2,3,4,6,12].includes(+f.split||1)?"":esc(f.split)}" aria-label="Số tháng khác"></div>
+        ${(+f.split||1)>1?`<div class="splitprev">${splitParts(Number(f.amount)||0,f.date,+f.split,f.note).map(x=>`<span><b>T${Number(x.date.slice(5,7))}/${x.date.slice(2,4)}</b> ${f.amount?fmt(x.amount):"–"}</span>`).join("")}</div><div class="small muted">Khi lưu sẽ tạo ${f.split} khoản, mỗi tháng một khoản (cùng ngày ${Number(f.date.slice(8))} hằng tháng), ghi chú thêm “(1/${f.split})”…</div>`:""}</div></div>`}
   </section>
   ${f.kind==="transfer" ? "" : `<section class="card">
     <div class="row between"><h2>Hạng mục</h2><button class="link" id="editCats">Sửa hạng mục</button></div>
@@ -1193,6 +1209,7 @@ function formView(){
   ${editing && !ro ? (S.confirmDel ? `<div class="note row between" style="flex-wrap:wrap"><span>Xoá hẳn khoản này?</span><span class="row"><button class="chip" id="fDelNo">Không</button><button class="btn danger" id="fDelYes" style="min-height:38px;padding:8px 14px">Xoá</button></span></div>` : `<button class="btn danger" id="fDel">Xoá ghi chép</button>`) : ""}`;
   const amt = $("#fAmount");
   amt.addEventListener("input",()=>{ const n=parseAmount(amt.value); f.amount=n||""; amt.value=n?fmt(n):""; });
+  amt.addEventListener("change",()=>{ if((+f.split||1)>1) formView(); });
   document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{ if(f.kind===b.dataset.k) return; f.kind=b.dataset.k; const c=catById(f.categoryId); if(!c || c.kind!==f.kind) f.categoryId=""; formView(); });
   document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ f.amount=Number(b.dataset.q); formView(); });
   $("[data-x]").onclick=()=>{ f.amount=(Number(f.amount)||0)*1000; formView(); };
@@ -1208,6 +1225,8 @@ function formView(){
   // Enter trên bàn phím (ô số tiền / ghi chú) = Lưu
   ["#fAmount","#fNote"].forEach(sel=>{ const el=$(sel); if(el) el.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); el.blur(); saveForm(); } }); });
   const ec=$("#editCats"); if(ec) ec.onclick=()=>{ S.catKind=f.kind==="income"?"income":"expense"; S.moreSub="cats"; S.backTo="add"; S.tab="more"; markTab("more"); render(); window.scrollTo(0,0); };
+  document.querySelectorAll("[data-split]").forEach(b=>b.onclick=()=>{ f.split=+b.dataset.split; formView(); });
+  const sn=$("#fSplitN"); if(sn) sn.onchange=()=>{ const n=parseInt(sn.value,10); f.split=n>=2&&n<=36?n:1; formView(); };
   const fw=$("#fWallet"); if(fw) fw.onchange=()=>{ f.walletId=fw.value; formView(); };
   const ft=$("#fTo"); if(ft) ft.onchange=()=>{ f.toWalletId=ft.value; formView(); };
   $("#fDate").onchange=e=>{ f.date=e.target.value; document.querySelectorAll("[data-d]").forEach(z=>z.setAttribute("aria-pressed",z.dataset.d===f.date)); };
@@ -1239,7 +1258,21 @@ async function saveForm(){
   else if (!catById(f.categoryId)) { err.textContent="Chọn một hạng mục."; window.scrollTo({top:200,behavior:"smooth"}); return; }
   const body = { kind:f.kind, amount, walletId:f.walletId, date:f.date, note:(f.note||"").trim(), categoryId: f.kind==="transfer"?"":f.categoryId, toWalletId: f.kind==="transfer"?f.toWalletId:"" };
   const btn=$("#fSave"), fab=$("#fSaveFab"); btn.disabled=true; btn.textContent="Đang lưu…"; if(fab) fab.disabled=true;
+  const nSplit = f.kind==="transfer" ? 1 : Math.max(1,Math.min(36,+f.split||1));
   try{
+    if (nSplit>1){
+      // chia nhiều tháng: sửa → khoản cũ thành phần 1, thêm các phần sau; ghi mới → thêm đủ n khoản
+      const parts=splitParts(amount,f.date,nSplit,body.note);
+      for (const [i,pt] of parts.entries()){
+        const b={...body,amount:pt.amount,date:pt.date,note:pt.note};
+        if (i===0 && S.editId){ const old=S.txs.find(t=>t.id===S.editId)||{}; await S.db.doc("tx/"+S.editId).set({...strip0(old), ...b, updatedAt:Date.now(), updatedBy:S.uid||""}); }
+        else await S.db.collection("tx").add({...b, by:S.uid||"", createdAt:Date.now()});
+      }
+      toast(`Đã chia ${fmt(amount)} đ thành ${nSplit} khoản: ${parts.map(x=>"T"+Number(x.date.slice(5,7))).join(", ")}`);
+      const k=f.kind, w=f.walletId, wasEdit=!!S.editId; S.editId=null; S.form=null;
+      if (wasEdit) setTab("book"); else { S.form=blankForm(); S.form.kind=k; S.form.walletId=w; S.month=ymOf(f.date); formView(); window.scrollTo(0,0); }
+      return true;
+    }
     if (S.editId){ const old=S.txs.find(t=>t.id===S.editId)||{}; await S.db.doc("tx/"+S.editId).set({...strip0(old), ...body, updatedAt:Date.now(), updatedBy:S.uid||""}); toast("Đã lưu thay đổi"); S.editId=null; S.form=null; setTab("book"); return true; }
     else { await S.db.collection("tx").add({...body, by:S.uid||"", createdAt:Date.now()}); toast(`Đã ghi ${f.kind==="income"?"+":f.kind==="expense"?"−":""}${fmt(amount)} đ`); const k=f.kind, w=f.walletId; S.form=blankForm(); S.form.kind=k; S.form.walletId=w; S.month=ymOf(body.date); formView(); window.scrollTo(0,0); return true; }
   }catch(e){ handleWriteErr(e); btn.disabled=false; btn.textContent=S.editId?"Lưu thay đổi":"Lưu ghi chép"; if(fab) fab.disabled=false; }
