@@ -230,6 +230,16 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 2px}
 .catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 6px}
 /* nhập nhanh */
+.micbtn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:7px 14px 7px 10px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.micbtn svg,.vmic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.vsheet{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+.vpanel{width:100%;max-width:560px;background:var(--surface);border-radius:22px 22px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;animation:rise .25s var(--ease-out)}
+.vmic{align-self:center;width:76px;height:76px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.vmic svg{width:34px;height:34px}
+.vmic.on{background:var(--expense);color:#fff;animation:micpulse 1.2s ease-in-out infinite}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--expense) 55%,transparent)}50%{box-shadow:0 0 0 16px transparent}}
+.vprev{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:14px;padding:10px 12px}
+.vprev > div{display:flex;justify-content:space-between;gap:12px} .vprev span{color:var(--muted)} .vprev b{display:inline-flex;align-items:center;gap:6px;text-align:right;overflow-wrap:anywhere} .vprev i{color:var(--muted);font-weight:500}
 .tpl{flex:none;display:flex;align-items:center;gap:8px;max-width:220px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--c) 8%,var(--surface));text-align:left;color:inherit}
 .tpl > span:not(.ico){display:flex;flex-direction:column;min-width:0;line-height:1.25} .tpl b{font-weight:600;overflow-wrap:anywhere}
 .ico.xs{width:22px;height:22px;border-radius:7px}
@@ -449,6 +459,7 @@ ICONS.saving.d = ICONS.piggy.d;
 const ICON_KEYS = Object.keys(ICONS).filter(k=>!["cash","saving","ewallet","transfer","calendar","pen"].includes(k));
 const WICON_KEYS = ["cash","bank","card","saving","ewallet"];
 const NAME_HINTS = [
+  [/hoan tien|tien hoan|diem thuong|cashback/,"cashback"],
   [/an sang|banh mi/,"breakfast"],[/sach vo|^sach\b|van phong pham/,"book"],[/my pham|son moi/,"lipstick"],[/thue nha|tien thue/,"key"],
   [/do dac|noi that|do dung nha/,"sofa"],[/thuoc/,"pill"],[/kham|benh vien|chua benh/,"stetho"],[/trang phuc/,"hanger"],[/quan ao/,"shirt"],
   [/phi chuyen|phi the|phi ngan hang|phi dich vu/,"fee"],[/bieu tang|qua tang|qua cap/,"gift"],[/hoan tien|diem thuong|cashback/,"cashback"],[/li xi|mung tuoi/,"envelope"],
@@ -463,7 +474,8 @@ const NAME_HINTS = [
   [/mua sam|do dung/,"bag"],[/lam dep|my pham|cat toc|spa/,"beauty"],[/hieu hi|dam cuoi|ma chay|mung cuoi|phong bi/,"envelope"],[/giai tri|xem phim|karaoke/,"ticket"],
   [/du lich|nghi duong/,"plane"],[/bo me|ong ba|gia dinh|bieu/,"family"],[/thu cung|cho meo|\bpet\b/,"pet"],
   [/bao hiem/,"shield"],[/tra no|tra gop|khoan vay/,"receipt"],[/the thao|gym|tap luyen/,"sport"],[/\bgas\b|bep/,"gas"],
-  [/luong/,"salary"],[/thuong/,"star"],[/kinh doanh|ban hang/,"store"],[/duoc tang|qua tang|li xi|duoc cho/,"gift"],[/lai tiet kiem|tiet kiem/,"piggy"],[/thu no|cho vay/,"handshake"],[/dau tu|co tuc|chung khoan/,"coins"]
+  [/luong/,"salary"],[/thuong/,"star"],[/kinh doanh|ban hang/,"store"],[/duoc tang|qua tang|li xi|duoc cho/,"gift"],[/lai tiet kiem|tiet kiem/,"piggy"],[/thu no|cho vay/,"handshake"],[/dau tu|co tuc|chung khoan/,"coins"],
+  [/\ban (sang|trua|toi|vat|com|pho|bun)|\bpho\b|\bbun\b|\bmien\b|\bchao\b|\blau\b|nha hang|quan an/,"food"]
 ];
 function guessIcon(name){ const s=strip(name); for(const [re,k] of NAME_HINTS) if(re.test(s)) return k; return "other"; }
 // hạng mục & ví dùng icon màu trong icons/ (Fluent Emoji, MIT); calendar / pen giữ icon nét vì là nút giao diện
@@ -957,6 +969,128 @@ function noteSuggestions(kind, q){
     const o=m.get(k)||{note,n:0,t}; o.n++; if(t.date>=o.t.date) o.t=t; m.set(k,o); });
   return [...m.values()].filter(o=>strip(o.note)!==strip(q)).sort((a,b)=>b.n-a.n).slice(0,5);
 }
+/* ---------- ghi bằng giọng nói: điện thoại đổi giọng nói → chữ, bộ đọc câu dưới đây tách ra khoản ghi ---------- */
+// "35k", "35 nghìn", "1 triệu 2", "1,5 triệu", "1 triệu rưỡi", "200 nghìn", "35.000", "2 củ" → số đồng; số trần < 1000 hiểu là nghìn.
+// Ưu tiên số có đơn vị; bỏ qua số đứng sau "tháng"/"ngày" (vd "tiền điện tháng 9 850 nghìn")
+function parseAmountText(t){
+  const re=/(\d+(?:[.,]\d+)*)\s*(ty|trieu|tr|cu|nghin|ngan|k|dong|d|vnd)?\b(?:\s*(ruoi|\d{1,3})\b)?/g;
+  let m; const all=[];
+  while ((m=re.exec(t))){
+    // "tháng 9", "ngày 15" (đứng trước) hay "2 người", "3 ly" (đứng sau) là số lượng, không phải tiền
+    if (/\b(thang|ngay)\s*$/.test(t.slice(0,m.index)) || /^\s*(nguoi|lan|cai|chiec|ly|coc|bat|to|suat|phan|hop|goi|kg|lit|qua|cuon|doi|bo)\b/.test(t.slice(m.index+m[1].length))) { re.lastIndex=m.index+m[1].length; continue; }
+    const raw=m[1]; let n = /^\d{1,3}([.,]\d{3})+$/.test(raw) ? Number(raw.replace(/[.,]/g,"")) : Number(raw.replace(",","."));
+    if (!isFinite(n)) continue;
+    const u=m[2]||"", mul = u==="ty"?1e9 : (u==="trieu"||u==="tr"||u==="cu")?1e6 : (u==="nghin"||u==="ngan"||u==="k")?1e3 : 1;
+    let v=n*mul, end=m.index+m[0].length; const tail=m[3];
+    if (tail && mul>=1e6){ if(tail==="ruoi") v+=mul/2; else { const k=Number(tail); v += k<10 ? k*mul/10 : k<100 ? k*mul/100 : k*mul/1000; } }
+    else if (tail==="ruoi" && mul===1e3) v+=500;
+    else if (tail){ end-=m[0].length-m[0].indexOf(tail); re.lastIndex=end; }   // số sau là số khác
+    if (mul===1 && v<1000) v*=1000;
+    all.push({v:Math.round(v), s:m.index, e:end, unit:mul>1||/^\d{1,3}([.,]\d{3})+$/.test(raw)||n>=1000});
+  }
+  return all.find(x=>x.unit) || all[0] || null;
+}
+function parseSpoken(text){
+  const orig=String(text||"").replace(/\s+/g," ").trim();
+  // bản không dấu, giữ đúng vị trí từng ký tự để cắt được cả câu gốc
+  let t=[...orig].map(ch=>(ch.trim()? strip(ch) : " ")||ch).join("");
+  if (t.length!==orig.length) t=strip(orig);
+  const keep=[...orig].map(()=>true);
+  const mask=(a,b)=>{ t=t.slice(0,a)+" ".repeat(b-a)+t.slice(b); for(let i=a;i<b&&i<keep.length;i++) keep[i]=false; };
+  const take=re=>{ const m=re.exec(t); if(m) mask(m.index,m.index+m[0].length); return m; };
+  const out={date:todayStr()};
+  // ngày
+  if (take(/\bhom kia\b/)) out.date=dateAdd(todayStr(),-2);
+  else if (take(/\b(hom|toi|sang|trua|chieu) qua\b/)) out.date=dateAdd(todayStr(),-1);
+  else take(/\b(hom|sang|trua|chieu|toi) nay\b/);
+  let m=/\b(?:ngay\s*)?(\d{1,2})\s*(?:\/|thang)\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr)\b)/.exec(t) || /\bngay\s*(\d{1,2})\b(?!\s*(?:nghin|ngan|k|trieu|tr)\b)/.exec(t);
+  if (m){ const now=new Date(), d=+m[1], mo=m[2]?+m[2]:now.getMonth()+1;
+    if(d>=1&&d<=31&&mo>=1&&mo<=12){ const y=now.getFullYear(), ds=y+"-"+pad(mo)+"-"+pad(d); out.date = ds>todayStr()? (y-1)+"-"+pad(mo)+"-"+pad(d) : ds; mask(m.index,m.index+m[0].length); } }
+  // số tiền
+  const a=parseAmountText(t); if(a){ out.amount=a.v; mask(a.s,a.e); }
+  take(/\b(nghin dong|dong|vnd)\b/);
+  // ví: theo tên ví, hoặc "tiền mặt" / "thẻ" / "chuyển khoản"
+  const ws=sortedWallets(), esc2=x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  const findW=str=>{ let w=ws.filter(x=>x.name&&new RegExp("\\b"+esc2(strip(x.name))+"\\b").test(str)).sort((p,q)=>q.name.length-p.name.length)[0];
+    if(!w && /\btien mat\b/.test(str)) w=ws.find(x=>x.type==="cash");
+    if(!w && /\b(quet the|the)\b/.test(str)) w=ws.find(x=>x.type==="card")||ws.find(x=>x.type==="bank");
+    if(!w && /\b(chuyen khoan|ck|ngan hang|banking)\b/.test(str)) w=ws.find(x=>x.type==="bank")||ws.find(x=>x.type==="card");
+    return w; };
+  if ((m=/\b(?:chuyen|rut)\b.*?\b(?:tu|o)\s+(.+?)\s+(?:sang|vao|qua)\s+(.+)$/.exec(t))){
+    const w1=findW(m[1]), w2=findW(m[2]); if(w1&&w2&&w1!==w2){ Object.assign(out,{kind:"transfer",walletId:w1.id,toWalletId:w2.id,note:""}); return out; } }
+  if (/\brut tien\b/.test(t)){ const bank=ws.find(x=>x.type==="bank"), cash=ws.find(x=>x.type==="cash"); if(bank&&cash){ Object.assign(out,{kind:"transfer",walletId:bank.id,toWalletId:cash.id,note:""}); return out; } }
+  const w=findW(t);
+  if (w){ out.walletId=w.id;
+    take(new RegExp("\\b((tra )?bang|tu|qua|o|vao)?\\s*(vi\\s*)?"+esc2(strip(w.name))+"\\b")) ||
+    take(/\b((tra )?bang\s*)?(tien mat|quet the|the|chuyen khoan|ck)\b/); }
+  // hạng mục: tên trùng trong câu + gợi ý theo nghĩa (icon) + lịch sử ghi chú cũ
+  const ts=t.replace(/\s+/g," ").trim(), words=ts.split(" ").filter(x=>x.length>1), score={};
+  const icon=guessIcon(ts), TRANSPORT=["fuel","car","bus","bike"];
+  const GENERIC=new Set(["tien","duoc","cho","cac","khac","nhung","the","va","hang","ngay","thang"]);
+  S.cats.forEach(c=>{ const n=strip(c.name), nw=n.split(/[^a-z0-9]+/).filter(x=>x.length>2&&!GENERIC.has(x)), ci=catIconKey(c); let sc=0;
+    if (n && ts.includes(n)) sc+=6; else if (nw.length) sc+=4*nw.filter(x=>words.includes(x)).length/nw.length;
+    if (icon!=="other" && ci===icon) sc+=3;
+    else if (TRANSPORT.includes(icon) && TRANSPORT.includes(ci)) sc+=2;                 // "đổ xăng" → Đi lại khi không có mục Xăng
+    if (sc) score[c.id]=(score[c.id]||0)+sc; });
+  S.txs.forEach(x=>{ const n=strip(x.note||""); if(!n||!x.categoryId) return; const nw=n.split(" ").filter(y=>y.length>2); if(!nw.length) return;
+    const hit=nw.filter(y=>words.includes(y)).length/nw.length; if(hit>=.6) score[x.categoryId]=(score[x.categoryId]||0)+Math.min(1,hit)*.5; });
+  Object.keys(score).forEach(id=>{ if(score[id]>12) score[id]=12; });
+  const ranked=Object.entries(score).filter(([id])=>catById(id)).sort((p,q)=>q[1]-p[1]);
+  const incomeKw=/\b(thu|nhan|duoc cho|duoc tang|luong|thuong|hoan tien|li xi|tien vao|ban duoc|lai tiet kiem)\b/;
+  let kind = incomeKw.test(ts)&&!/\b(mua|an|uong|tra)\b/.test(ts) ? "income" : null;
+  const best = kind ? ranked.find(([id])=>catById(id).kind===kind) : ranked[0];
+  if (!kind) kind = best ? catById(best[0]).kind : "expense";
+  if (best && best[1]>=2) out.categoryId=best[0];
+  out.kind=kind;
+  // ghi chú = phần còn lại của câu gốc (giữ dấu), bỏ động từ mở đầu
+  let note=[...orig].filter((_,i)=>keep[i]).join("").replace(/\s+/g," ").replace(/^\s*(chi|mua|trả|tiêu|thu|nhận|nhận được)\s+/i,"").replace(/^[\s,.-]+|[\s,.-]+$/g,"");
+  out.note = note ? note[0].toUpperCase()+note.slice(1) : "";
+  return out;
+}
+function voiceSheet(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  let box=$("#vsheet"); if(box) box.remove();
+  box=document.createElement("div"); box.id="vsheet"; box.className="vsheet";
+  box.innerHTML=`<div class="vpanel" role="dialog" aria-label="Ghi bằng giọng nói">
+    <div class="row between"><h2>Nói để ghi</h2><button class="chip" id="vClose">Đóng</button></div>
+    <button class="vmic" id="vMic" aria-label="Bắt đầu nói"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></button>
+    <div class="small muted" id="vStatus">${SR?"Bấm mic rồi nói, ví dụ: “cafe 35 nghìn hôm qua”, “đổ xăng 80k bằng thẻ”, “nhận lương 15 triệu”.":"Trình duyệt này chưa hỗ trợ nhận giọng nói. Bấm vào ô dưới rồi dùng nút mic trên bàn phím điện thoại để đọc."}</div>
+    <textarea class="input" id="vText" rows="2" placeholder="Hoặc gõ: cafe 35k hôm qua"></textarea>
+    <div class="vprev" id="vPrev" hidden></div>
+    <div class="btnrow"><button class="btn" id="vApply" disabled>Điền vào form</button></div></div>`;
+  document.body.appendChild(box);
+  const txt=$("#vText"), st=$("#vStatus"), prev=$("#vPrev"), ap=$("#vApply"), micb=$("#vMic");
+  let rec=null, parsed=null;
+  const show=()=>{ const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
+    parsed=parseSpoken(v); const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
+    prev.hidden=false;
+    prev.innerHTML=`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
+      <div><span>Số tiền</span><b class="num">${parsed.amount?fmt(parsed.amount)+" đ":"<i>chưa nghe rõ</i>"}</b></div>
+      ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"<i>chọn sau</i>"}</b></div>`}
+      <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
+      ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
+      ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}`; };
+  txt.oninput=show;
+  const close=()=>{ try{rec&&rec.abort()}catch(e){} box.remove(); };
+  $("#vClose").onclick=close; box.onclick=e=>{ if(e.target===box) close(); };
+  ap.onclick=()=>{ if(!parsed) return; const f=S.form||blankForm();
+    S.form={...f,kind:parsed.kind,date:parsed.date,amount:parsed.amount||f.amount||"",note:parsed.note??f.note,
+      categoryId:parsed.kind==="transfer"?"":(parsed.categoryId||(catById(f.categoryId)?.kind===parsed.kind?f.categoryId:"")),
+      walletId:parsed.walletId||f.walletId, toWalletId:parsed.toWalletId||f.toWalletId};
+    close(); formView(); window.scrollTo(0,0);
+    toast(S.form.amount&&(S.form.categoryId||S.form.kind==="transfer")?"Đã điền xong, kiểm tra rồi bấm Lưu":"Đã điền, còn thiếu "+(!S.form.amount?"số tiền":"hạng mục")); };
+  if (!SR){ micb.disabled=true; txt.focus(); return; }
+  const start=()=>{ try{ rec=new SR(); }catch(e){ st.textContent="Không mở được mic."; return; }
+    rec.lang="vi-VN"; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1;
+    let fin="";
+    rec.onstart=()=>{ micb.classList.add("on"); st.textContent="Đang nghe… nói xong thì dừng một chút."; };
+    rec.onresult=e=>{ let interim=""; for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) fin+=r[0].transcript; else interim+=r[0].transcript; } txt.value=(fin+interim).trim(); show(); };
+    rec.onerror=e=>{ st.textContent = e.error==="not-allowed"||e.error==="service-not-allowed" ? "Chưa được phép dùng mic. Hãy cho phép mic cho trang này trong cài đặt trình duyệt." : e.error==="no-speech" ? "Chưa nghe thấy gì, bấm mic để nói lại." : "Lỗi nhận giọng nói ("+e.error+"). Bạn có thể gõ vào ô dưới."; };
+    rec.onend=()=>{ micb.classList.remove("on"); if(txt.value.trim()){ st.textContent="Kiểm tra bên dưới rồi bấm “Điền vào form” (hoặc sửa chữ trong ô)."; show(); } };
+    rec.start(); };
+  micb.onclick=()=>{ if(micb.classList.contains("on")){ try{rec.stop()}catch(e){} } else start(); };
+  start();
+}
 function blankForm(){ const ws=sortedWallets(); return {kind:"expense",amount:"",categoryId:"",walletId:ws[0]?.id||"",toWalletId:ws[1]?.id||"",date:todayStr(),note:""}; }
 function formView(){
   if (!S.form) S.form = blankForm();
@@ -968,7 +1102,7 @@ function formView(){
   const tpls = editing||f.kind==="transfer" ? [] : quickTemplates(f.kind), freq = f.kind==="transfer" ? [] : frequentCats(f.kind);
   $("#view").innerHTML = `
   <section class="kindhead k-${f.kind}">
-    <div class="row between"><h2>${editing?"Sửa ghi chép":"Ghi chép mới"}</h2>${editing?`<span class="small muted">Người nhập: ${esc(byName(f.by))}</span>`:""}</div>
+    <div class="row between"><h2>${editing?"Sửa ghi chép":"Ghi chép mới"}</h2>${editing?`<span class="small muted">Người nhập: ${esc(byName(f.by))}</span>`:ro?"":`<button class="micbtn" id="fMic" aria-label="Ghi bằng giọng nói"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>Nói để ghi</button>`}</div>
     ${ro?`<div class="note">Bạn đang chỉ có quyền xem sổ này.</div>`:""}
     <div class="seg" role="group" aria-label="Loại">${[["expense","Chi tiền"],["income","Thu tiền"],["transfer","Chuyển ví"]].map(([k,l])=>`<button data-k="${k}" aria-pressed="${f.kind===k}">${l}</button>`).join("")}</div>
     <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="0" value="${f.amount?fmt(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
@@ -1009,6 +1143,7 @@ function formView(){
   // ghi nhanh: điền hạng mục, ghi chú, số tiền, ví như lần trước; giữ ngày đang chọn
   document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{ const t=tpls[+b.dataset.tpl]; Object.assign(f,{categoryId:t.categoryId,note:t.note||"",amount:+t.amount,walletId:walletById(t.walletId)?t.walletId:f.walletId}); formView(); toast("Đã điền sẵn, kiểm tra rồi bấm Lưu"); });
   document.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ f.date=b.dataset.d; $("#fDate").value=f.date; document.querySelectorAll("[data-d]").forEach(z=>z.setAttribute("aria-pressed",z===b)); });
+  const mic=$("#fMic"); if(mic) mic.onclick=()=>voiceSheet();
   const dup=$("#fDup"); if(dup) dup.onclick=()=>{ const {kind,amount,categoryId,walletId,toWalletId,note}=f; S.editId=null; S.confirmDel=false; S.form={kind,amount,categoryId,walletId,toWalletId,note,date:todayStr()}; formView(); window.scrollTo(0,0); toast("Đã chép sang khoản mới, bấm Lưu để ghi"); };
   // Enter trên bàn phím (ô số tiền / ghi chú) = Lưu
   ["#fAmount","#fNote"].forEach(sel=>{ const el=$(sel); if(el) el.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); el.blur(); saveForm(); } }); });
