@@ -506,7 +506,7 @@ const WICON_KEYS = ["cash","bank","card","saving","ewallet"];
 const NAME_HINTS = [
   [/\bchong\b/,"husband"],[/\bvo gui\b|\btien vo\b|\bcho vo\b/,"wife"],
   [/hoan tien|tien hoan|diem thuong|cashback/,"cashback"],
-  [/an sang|banh mi/,"breakfast"],[/sach vo|^sach\b|van phong pham/,"book"],[/my pham|son moi/,"lipstick"],[/thue nha|tien thue/,"key"],
+  [/an sang|banh mi/,"breakfast"],[/sach vo|^sach\b|van phong pham/,"book"],[/my pham|son moi/,"lipstick"],[/thue nha|tien thue|tien nha/,"key"],
   [/do dac|noi that|do dung nha/,"sofa"],[/thuoc/,"pill"],[/kham|benh vien|chua benh/,"stetho"],[/trang phuc/,"hanger"],[/quan ao/,"shirt"],
   [/phi chuyen|phi the|phi ngan hang|phi dich vu/,"fee"],[/bieu tang|qua tang|qua cap|qua sinh nhat|sinh nhat|ky niem/,"gift"],[/hoan tien|diem thuong|cashback/,"cashback"],[/li xi|mung tuoi/,"envelope"],
   [/cho vay/,"lend"],[/lai vay/,"percent"],[/di vay|tra no|tra gop|khoan vay/,"loan"],[/ngan hang/,"bank"],[/^thue(?! nha)|le phi|^phi\b/,"receipt"],
@@ -1088,13 +1088,13 @@ function parseSpoken(text){
   S.cats.forEach(c=>{ const n=strip(c.name), nw=n.split(/[^a-z0-9]+/).filter(x=>x.length>2&&!GENERIC.has(x)), ci=catIconKey(c); let sc=0;
     if (n && ts.includes(n)) sc+=6; else if (nw.length) sc+=4*nw.filter(x=>words.includes(x)).length/nw.length;
     if (icon!=="other" && ci===icon) sc+=3;
-    else if (TRANSPORT.includes(icon) && TRANSPORT.includes(ci)) sc+=2;                 // "đổ xăng" → Đi lại khi không có mục Xăng
+    else if (TRANSPORT.includes(icon) && TRANSPORT.includes(ci)) sc+=isGroupHead(c)?2.2:1; /* xăng không có mục riêng → về nhóm đi lại chung */                 // "đổ xăng" → Đi lại khi không có mục Xăng
     if (sc) score[c.id]=(score[c.id]||0)+sc; });
   // "sữa" (cho bé) và "sửa" (xe, nhà) giống nhau khi bỏ dấu: nhìn câu gốc để phân biệt
   if (/sữa/i.test(orig) && !/sửa/i.test(orig)) S.cats.forEach(c=>{ if(/sửa/i.test(c.name)) score[c.id]=(score[c.id]||0)-5; else if(["kids","baby"].includes(catIconKey(c))) score[c.id]=(score[c.id]||0)+3; });
   S.txs.forEach(x=>{ const n=strip(x.note||""); if(!n||!x.categoryId) return; const nw=n.split(" ").filter(y=>y.length>2); if(!nw.length) return;
     const hit=nw.filter(y=>words.includes(y)).length/nw.length; if(hit>=.6) score[x.categoryId]=(score[x.categoryId]||0)+Math.min(1,hit)*.5; });
-  Object.keys(score).forEach(id=>{ if(score[id]>12) score[id]=12; });
+  Object.keys(score).forEach(id=>{ if(score[id]>12) score[id]=12; if(isGroupHead(catById(id))) score[id]-=.1; /* ngang điểm thì ưu tiên hạng mục chi tiết */ });
   const ranked=Object.entries(score).filter(([id])=>catById(id)).sort((p,q)=>q[1]-p[1]);
   const incomeKw=/\b(thu|nhan|duoc cho|duoc tang|luong|thuong|hoan tien|li xi|tien vao|ban duoc|lai tiet kiem)\b/;
   let kind = incomeKw.test(ts)&&!/\b(mua|an|uong|tra)\b/.test(ts) ? "income" : null;
@@ -1204,7 +1204,7 @@ function voiceSheet(){
   micb.onclick=()=>{ if(micb.classList.contains("on")){ try{rec.stop()}catch(e){} } else start(); };
   start();
 }
-/* lưới chọn hạng mục chia theo nhóm (giống MISA): nhóm có mục con → dòng tiêu đề + các mục chi tiết;
+/* lưới chọn hạng mục chia theo nhóm (giống MISA): nhóm có mục con → dòng tiêu đề + các mục chi tiết (không có ô mục chung);
    các hạng mục đứng riêng gom vào mục "Hạng mục lẻ" ở cuối */
 function groupedCatGrid(cats, attr, sel){
   const g=c=>(c.parent||c.name||"").trim(), size={}; cats.forEach(c=>size[g(c)]=(size[g(c)]||0)+1);
@@ -1216,9 +1216,10 @@ function groupedCatGrid(cats, attr, sel){
   const tile=(c,label)=>`<button class="catbtn" style="--c:${catColor(c)}" ${attr}="${esc(c.id)}" data-s="${esc(strip(c.name+" "+(c.parent||"")))}" aria-pressed="${sel===c.id}">${icoHTML(catIconKey(c))}<span class="n">${esc(label||c.name)}</span></button>`;
   return secs.map(({name,list})=>{
     if (name===null) return `<div class="catsec">${secs.length>1?`<div class="cathead lone">${icoHTML("other","xs")}<b>Hạng mục lẻ</b><span class="muted">${list.length} mục</span></div>`:""}<div class="catgrid">${list.map(c=>tile(c)).join("")}</div></div>`;
-    const main=list.find(c=>!c.parent&&c.name===name), kids=[...(main?[main]:[]),...list.filter(c=>c!==main)];
+    // chỉ hiện hạng mục chi tiết; mục chung của nhóm chỉ hiện khi khoản đang sửa đang dùng nó
+    const main=list.find(c=>!c.parent&&c.name===name), kids=[...(main&&sel===main.id?[main]:[]),...list.filter(c=>c!==main)];
     const ico=main?catIconKey(main):guessIcon(name)!=="other"?guessIcon(name):catIconKey(list[0]);
-    return `<div class="catsec"><div class="cathead" style="--c:${catColor(main||list[0])}">${icoHTML(ico,"xs")}<b>${esc(name)}</b><span class="muted">${list.length} mục</span></div><div class="catgrid">${kids.map(c=>tile(c,c===main?"Chung":"")).join("")}</div></div>`; }).join("");
+    return `<div class="catsec"><div class="cathead" style="--c:${catColor(main||list[0])}">${icoHTML(ico,"xs")}<b>${esc(name)}</b><span class="muted">${list.length-(main?1:0)} mục</span></div><div class="catgrid">${kids.map(c=>tile(c,c===main?name+" (chung)":"")).join("")}</div></div>`; }).join("");
 }
 // sau khi lọc tìm kiếm: ẩn nhóm không còn mục nào
 const syncCatSections = root => root.querySelectorAll(".catsec").forEach(sec=>{ sec.hidden=![...sec.querySelectorAll(".catbtn")].some(b=>!b.hidden); });
