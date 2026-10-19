@@ -675,7 +675,7 @@ const strip0 = o => { const c={...o}; delete c.id; return c; };
 
 /* ---------- donut ---------- */
 /* màu biểu đồ theo thứ hạng (không theo icon) để các lát cạnh nhau luôn khác màu; từ hạng 7 trở đi là xám "khác" */
-const CHART_COLORS=["#4f8ef7","#f5a524","#2fbf71","#a259ff","#22b8cf","#ff6fb5"], CHART_REST="#9aa4ae";
+const CHART_COLORS=["#4f8ef7","#f5a524","#2fbf71","#a259ff","#22b8cf","#ff6fb5","#ff7a45","#5c6bc0","#9ccc65","#e5484d","#14b8a6","#c084fc","#eab308","#38bdf8","#f472b6","#84cc16"], CHART_REST="#9aa4ae";
 const rankColor = i => CHART_COLORS[i] || CHART_REST;
 function donut(rows, total, center){
   const R=52, C=2*Math.PI*R; let off=0; let arcs="";
@@ -833,7 +833,8 @@ function spendTrendCard(ym){
   const groupOf=id=>{ const c=catById(id); return (c?.parent||c?.name||"Không rõ").trim(); };
   const gTot={}, gKids={}; ranked.forEach(([id,v])=>{ const g=groupOf(id); gTot[g]=(gTot[g]||0)+v; (gKids[g]=gKids[g]||[]).push([id,v]); });
   per.forEach(p=>{ p.g={}; Object.entries(p.rows).forEach(([id,v])=>{ const g=groupOf(id); p.g[g]=(p.g[g]||0)+v; }); });
-  const granked=Object.entries(gTot).sort((a,b)=>b[1]-a[1]); const top=granked.slice(0,6).map(r=>r[0]);
+  // hiện riêng mọi nhóm ≥ 1% tổng chi; nhóm < 1% mới gom lại
+  const granked=Object.entries(gTot).sort((a,b)=>b[1]-a[1]), nShow=Math.max(1,granked.filter(([,v])=>v/grand>=0.01).length); const top=granked.slice(0,nShow).map(r=>r[0]);
   const colorOf=g=>{ const i=top.indexOf(g); return i<0?CHART_REST:rankColor(i); };
   const max=Math.max(...per.map(p=>p.tot),1), months_with=per.filter(p=>p.tot>0).length||1;
   const fixAll=per.reduce((s,p)=>s+p.fix,0), varAll=grand-fixAll;
@@ -848,9 +849,9 @@ function spendTrendCard(ym){
   const legRow = ([g,v]) => { const kids=gKids[g]||[], many=kids.length>1, open=S.homeOpenGroup===g;
       const head = `<button class="r" ${many?`data-group="${esc(g)}"`:`data-cattrend="${esc(kids[0][0])}"`}><i style="background:${colorOf(g)}"></i><span class="t">${esc(g)} ${tagOf(kids.map(k=>k[0]))}${many?` <span class="muted small">${kids.length} mục <span class="chev">${open?"▴":"▾"}</span></span>`:""}</span><b class="num small">${pct(v)}</b><span class="lv num">${fmt(v)} · TB ${shortMoney(v/months_with)}/tháng</span></button>`;
       return head + (many&&open ? `<div class="leg kids">${kids.map(([id,kv])=>{ const c=catById(id); return `<button class="r" data-cattrend="${esc(id)}"><i style="background:${colorOf(g)};opacity:.55"></i><span class="t">${esc(c?.parent?c.name:c?.name+" (chung)")}</span><b class="num small">${fmt(kv)}</b><span class="lv num">${(kv/v*100).toFixed(0)}% của nhóm · TB ${shortMoney(kv/months_with)}/tháng</span></button>`; }).join("")}</div>` : ""); };
-  const rest=granked.slice(6), open=!!S.homeMoreCats;
-  const legendCat = granked.slice(0,6).map(legRow).join("")
-    + (rest.length ? `<button class="r more" id="moreCats"><i style="background:${CHART_REST}"></i><span class="t">${open?"Thu gọn":`${rest.length} nhóm khác`} <span class="chev">${open?"▴":"▾"}</span></span><b class="num small">${pct(rest.reduce((s,r)=>s+r[1],0))}</b></button>
+  const rest=granked.slice(nShow), open=!!S.homeMoreCats;
+  const legendCat = granked.slice(0,nShow).map(legRow).join("")
+    + (rest.length ? `<button class="r more" id="moreCats"><i style="background:${CHART_REST}"></i><span class="t">${open?"Thu gọn":`${rest.length} nhóm dưới 1%`} <span class="chev">${open?"▴":"▾"}</span></span><b class="num small">${pct(rest.reduce((s,r)=>s+r[1],0))}</b></button>
       ${open?`<div class="leg morelist">${rest.map(legRow).join("")}</div>`:""}` : "");
   const fixCats=ranked.filter(([id])=>isFixedCat(catById(id)));
   const legendFix = `<div class="fxsum">
