@@ -149,7 +149,7 @@ h2{font-weight:700;font-size:16px;margin:0;text-wrap:balance}
 .mergebox{display:flex;flex-direction:column;gap:8px;padding:10px;margin:2px 0 8px;border-radius:12px;background:var(--surface-2)}
 /* chi tiêu 12 tháng: mỗi tháng một thanh ngang chia màu */
 .trend{display:flex;flex-direction:column;gap:8px}
-.trow{display:grid;grid-template-columns:30px 1fr 64px;align-items:center;gap:8px;background:none;border:0;padding:0;color:inherit;text-align:left}
+.trow{display:grid;grid-template-columns:48px 1fr 64px;align-items:center;gap:8px;background:none;border:0;padding:0;color:inherit;text-align:left}
 .trow .tm{font-size:12.5px;color:var(--muted);font-weight:700}
 .trow .track{height:16px;border-radius:6px;background:var(--surface-2);overflow:hidden}
 .trow .sbar{display:flex;height:100%;border-radius:6px;overflow:hidden;gap:1px;transform-origin:left}
@@ -688,7 +688,7 @@ function catTrendView(cid){
     <div class="nw"><div><span>Trung bình mỗi tháng</span><b class="num">${money(Math.round(total/withM))}</b></div>
     <div><span>Chiếm trong tổng chi ${N} tháng</span><b class="num">${allExp?(total/allExp*100).toFixed(1).replace(".",","):0}%</b></div>
     <div><span>Tháng chi nhiều nhất</span><b class="num">${(()=>{ const b=[...per].sort((a,b)=>b.sum-a.sum)[0]; return b.sum?monthLabel(b.m)+" · "+shortMoney(b.sum):"–"; })()}</b></div></div></section>
-  <section class="card"><h2>Theo từng tháng</h2><div class="trend">${per.map(p=>`<button class="trow ${p.m===S.catTrendM?"cur":""}" data-ctm="${p.m}"><span class="tm">T${Number(p.m.slice(5))}</span><span class="track"><span class="sbar" style="width:${p.sum/max*100}%"><i style="width:100%;background:${col}"></i></span></span><b class="num">${p.sum?shortMoney(p.sum):"–"}</b></button>`).join("")}</div>
+  <section class="card"><h2>Theo từng tháng</h2><div class="trend">${per.map(p=>`<button class="trow ${p.m===S.catTrendM?"cur":""}" data-ctm="${p.m}"><span class="tm">T${Number(p.m.slice(5))}/${p.m.slice(2,4)}</span><span class="track"><span class="sbar" style="width:${p.sum/max*100}%"><i style="width:100%;background:${col}"></i></span></span><b class="num">${p.sum?shortMoney(p.sum):"–"}</b></button>`).join("")}</div>
     <p class="small muted" style="margin:0">Bấm vào một tháng để xem các khoản bên dưới.</p></section>
   <section class="card" style="gap:4px"><div class="row between"><h2>${monthLabel(sel.m)}</h2><span class="small muted">${sel.l.length} khoản · <b class="num out-c">${fmt(sel.sum)}</b></span></div>
     ${sel.l.length?`<div class="list-plain">${sortTx(sel.l).map(t=>txRow(t).replace('<div class="s">',`<div class="s">${viDate(t.date)} · `)).join("")}</div>`:emptyTx("Tháng này không chi cho hạng mục này","Chọn tháng khác ở trên.")}</section>`;
@@ -720,7 +720,7 @@ function spendTrendCard(ym){
   const bars=per.map(p=>{ let segs="";
     if (mode==="cat"){ const parts=top.map(g=>[colorOf(g),p.g[g]||0]); parts.push([CHART_REST,p.tot-top.reduce((s,g)=>s+(p.g[g]||0),0)]); segs=parts.filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join(""); }
     else segs=[[FIX_C,p.fix],[VAR_C,p.tot-p.fix]].filter(x=>x[1]>0).map(([c,v])=>`<i style="width:${v/p.tot*100}%;background:${c}"></i>`).join("");
-    return `<button class="trow" data-trend-m="${p.m}"><span class="tm">T${Number(p.m.slice(5))}</span><span class="track"><span class="sbar" style="width:${p.tot/max*100}%">${segs}</span></span><b class="num">${p.tot?shortMoney(p.tot):"–"}</b></button>`; }).join("");
+    return `<button class="trow" data-trend-m="${p.m}"><span class="tm">T${Number(p.m.slice(5))}/${p.m.slice(2,4)}</span><span class="track"><span class="sbar" style="width:${p.tot/max*100}%">${segs}</span></span><b class="num">${p.tot?shortMoney(p.tot):"–"}</b></button>`; }).join("");
   const tagOf = ids => { const f=ids.filter(id=>isFixedCat(catById(id))).length; return f===ids.length?`<em class="tag fx">Cố định</em>`:f===0?`<em class="tag vr">Phát sinh</em>`:`<em class="tag mx">Hỗn hợp</em>`; };
   // một dòng nhóm: nhóm 1 mục thì bấm vào xem chi tiết luôn; nhóm nhiều mục thì bấm để xổ các mục con
   const legRow = ([g,v]) => { const kids=gKids[g]||[], many=kids.length>1, open=S.homeOpenGroup===g;
