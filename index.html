@@ -999,12 +999,12 @@ function bookView(){
     <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Tổng thu</span><b class="num in-c">${fmt(inc)}</b></span></div>
     <div><span class="arrow" style="background:var(--expense)">${ARROW_OUT}</span><span style="min-width:0"><span>Tổng chi</span><b class="num out-c">${fmt(exp)}</b></span></div>
   </div><div class="row between small"><span class="muted">Còn lại trong tháng</span><b class="num ${inc-exp<0?"out-c":"in-c"}">${money(inc-exp)}</b></div></div>
+  ${inc||exp ? monthBreakdown() : ""}
   ${monthCalendar(all)}
   <div class="listhead"><h2>${S.bookDay ? `${weekday(S.bookDay)}, ${viDate(S.bookDay)} · ${list.length} khoản` : `${all.length} khoản trong tháng`}</h2>${S.bookDay?`<button class="chip" id="calAll">Cả tháng</button>`:""}</div>
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const net=g.reduce((s,t)=>s+(t.kind==="income"?+t.amount:t.kind==="expense"?-t.amount:0),0);
     return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num ${net<0?"out-c":"in-c"}">${net<0?"−":"+"}${fmt(Math.abs(net))}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
-    : `<div class="card">${S.bookDay?emptyTx("Ngày này chưa có ghi chép","Chọn ngày khác trên lịch hoặc bấm + để ghi."):emptyTx("Tháng này chưa có ghi chép","Chuyển sang tháng khác hoặc bấm + để ghi.")}</div>`}
-  ${inc||exp ? monthBreakdown() : ""}`;
+    : `<div class="card">${S.bookDay?emptyTx("Ngày này chưa có ghi chép","Chọn ngày khác trên lịch hoặc bấm + để ghi."):emptyTx("Tháng này chưa có ghi chép","Chuyển sang tháng khác hoặc bấm + để ghi.")}</div>`}`;
   bindMonthBar(); bindTxRows(); bindMonthBreakdown();
   document.querySelectorAll("[data-cal]").forEach(b=>b.onclick=()=>{ S.bookDay = S.bookDay===b.dataset.cal ? null : b.dataset.cal; render(); });
   const ca=$("#calAll"); if(ca) ca.onclick=()=>{ S.bookDay=null; render(); };
