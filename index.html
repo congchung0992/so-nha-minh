@@ -554,7 +554,9 @@ const walletIconKey = w => (w && ICONS[w.icon]) ? w.icon : ({bank:"bank",card:"c
 /* ---------- tiện ích ---------- */
 const $ = (s, el=document) => el.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fmt = n => Math.round(n||0).toLocaleString("vi-VN");
+// hiển thị: làm tròn đến hàng nghìn (dữ liệu vẫn giữ đúng từng đồng); ô nhập số tiền dùng fmtExact
+const fmtExact = n => Math.round(n||0).toLocaleString("vi-VN");
+const fmt = n => { n=Number(n)||0; return fmtExact(Math.abs(n)>=1000 ? Math.round(n/1000)*1000 : n); };
 const money = n => (n<0?"−":"") + fmt(Math.abs(n)) + " đ";
 const pad = n => String(n).padStart(2,"0");
 const todayStr = () => { const d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
@@ -1164,7 +1166,7 @@ function voiceSheet(){
     const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
     prev.hidden=false;
     prev.innerHTML=`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
-      <div class="${parsed.amount?"":"miss"}"><span>${parsed.split>1&&parsed.kind!=="transfer"?"Tổng tiền":"Số tiền"}</span>${parsed.amount&&!typedAmt?`<b class="num">${fmt(parsed.amount)} đ</b>`:`<input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${typedAmt?fmt(typedAmt):""}" aria-label="Số tiền">`}</div>
+      <div class="${parsed.amount?"":"miss"}"><span>${parsed.split>1&&parsed.kind!=="transfer"?"Tổng tiền":"Số tiền"}</span>${parsed.amount&&!typedAmt?`<b class="num">${fmtExact(parsed.amount)} đ</b>`:`<input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${typedAmt?fmtExact(typedAmt):""}" aria-label="Số tiền">`}</div>
       ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div class="${c?"":"miss"}"><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"Bắt buộc chọn ↓"}</b></div>`}
       <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
@@ -1172,7 +1174,7 @@ function voiceSheet(){
       ${parsed.split>1&&parsed.kind!=="transfer"?`<div class="vsplit"><div class="row between"><span>Chia ${parsed.split} tháng</span><b class="num">${parsed.amount?"mỗi tháng ~"+fmt(Math.floor(parsed.amount/parsed.split/1000)*1000)+" đ":""}</b></div>
         ${splitParts(parsed.amount||0,parsed.date,parsed.split,"").map((x,i)=>`<div class="vsr"><span>${i+1}. T${Number(x.date.slice(5,7))}/${x.date.slice(0,4)}</span><span class="muted">ngày ${viDate(x.date).slice(0,5)}</span><b class="num">${parsed.amount?fmt(x.amount)+" đ":"–"}</b></div>`).join("")}</div>`:""}
 `;
-    const va=$("#vAmt"); if(va){ va.oninput=()=>{ const n=parseAmount(va.value); typedAmt=n; va.value=n?fmt(n):""; parsed.amount=n||undefined; va.closest(".miss,div")?.classList.toggle("miss",!n); checkNeed(); }; }
+    const va=$("#vAmt"); if(va){ va.oninput=()=>{ const n=parseAmount(va.value); typedAmt=n; va.value=n?fmtExact(n):""; parsed.amount=n||undefined; va.closest(".miss,div")?.classList.toggle("miss",!n); checkNeed(); }; }
     renderCats(parsed.kind, autoCat, parsed.cands||[]); checkNeed(); };
   // bắt buộc đủ số tiền + hạng mục (+ ví) mới cho lưu; báo rõ còn thiếu gì
   const buildForm=()=>{ const f=S.form||blankForm();
@@ -1268,7 +1270,7 @@ function formView(){
     <div class="row between"><h2>${editing?"Sửa ghi chép":"Ghi chép mới"}</h2>${editing?`<span class="small muted">Người nhập: ${esc(byName(f.by))}</span>`:ro?"":`<button class="micbtn" id="fMic" aria-label="Ghi bằng giọng nói"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>Nói để ghi</button>`}</div>
     ${ro?`<div class="note">Bạn đang chỉ có quyền xem sổ này.</div>`:""}
     <div class="seg" role="group" aria-label="Loại">${[["expense","Chi tiền"],["income","Thu tiền"],["transfer","Chuyển ví"]].map(([k,l])=>`<button data-k="${k}" aria-pressed="${f.kind===k}">${l}</button>`).join("")}</div>
-    <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="0" value="${f.amount?fmt(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
+    <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="0" value="${f.amount?fmtExact(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
     <div class="quick">${[20000,50000,100000,200000,500000,1000000].map(n=>`<button class="chip" data-q="${n}">${fmt(n)}</button>`).join("")}<button class="chip" data-x="000">×1.000</button></div>
   </section>
   <section class="card" style="gap:0">
@@ -1295,7 +1297,7 @@ function formView(){
   <div class="fabside">${ro||editing?"":`<button class="mic" id="fMicFab" aria-label="Ghi bằng giọng nói" title="Nói để ghi"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>`}${ro?"":`<button class="ok" id="fSaveFab" aria-label="${editing?"Lưu thay đổi":"Lưu ghi chép"}" title="Lưu"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Lưu</span></button>`}${editing?`<button class="no" id="fCancelFab" aria-label="Huỷ" title="Huỷ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:""}</div>
   ${editing && !ro ? (S.confirmDel ? `<div class="note row between" style="flex-wrap:wrap"><span>Xoá hẳn khoản này?</span><span class="row"><button class="chip" id="fDelNo">Không</button><button class="btn danger" id="fDelYes" style="min-height:38px;padding:8px 14px">Xoá</button></span></div>` : `<button class="btn danger" id="fDel">Xoá ghi chép</button>`) : ""}`;
   const amt = $("#fAmount");
-  amt.addEventListener("input",()=>{ const n=parseAmount(amt.value); f.amount=n||""; amt.value=n?fmt(n):""; });
+  amt.addEventListener("input",()=>{ const n=parseAmount(amt.value); f.amount=n||""; amt.value=n?fmtExact(n):""; });
   amt.addEventListener("change",()=>{ if((+f.split||1)>1) formView(); });
   document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{ if(f.kind===b.dataset.k) return; f.kind=b.dataset.k; const c=catById(f.categoryId); if(!c || c.kind!==f.kind) f.categoryId=""; formView(); });
   document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ f.amount=Number(b.dataset.q); formView(); });
@@ -1504,11 +1506,11 @@ function walletsView(){
   </section>`;
   bindBack();
   let editing=null;
-  const wi=$("#wInit"); wi.oninput=()=>{ const n=parseAmount(wi.value); wi.value=n?fmt(n):""; };
+  const wi=$("#wInit"); wi.oninput=()=>{ const n=parseAmount(wi.value); wi.value=n?fmtExact(n):""; };
   const mg=$("#wMerge"), mgTo=$("#wMergeTo"), mgGo=$("#wMergeGo");
   const reset=()=>{ editing=null; $("#wTitle").textContent="Thêm ví"; $("#wSave").textContent="Thêm ví"; $("#wReset").hidden=true; $("#wName").value=""; wi.value=""; $("#wType").value="cash"; mg.hidden=true; };
   $("#wReset").onclick=reset;
-  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const w=walletById(b.dataset.edit); editing=w.id; $("#wTitle").textContent="Sửa ví “"+w.name+"”"; $("#wSave").textContent="Lưu ví"; $("#wReset").hidden=false; $("#wName").value=w.name; wi.value=w.initial?fmt(w.initial):""; $("#wType").value=w.type||"cash";
+  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const w=walletById(b.dataset.edit); editing=w.id; $("#wTitle").textContent="Sửa ví “"+w.name+"”"; $("#wSave").textContent="Lưu ví"; $("#wReset").hidden=false; $("#wName").value=w.name; wi.value=w.initial?fmtExact(w.initial):""; $("#wType").value=w.type||"cash";
     const others=ws.filter(x=>x.id!==w.id); mg.hidden=!others.length;
     const cnt=id=>S.txs.filter(t=>t.walletId===id||t.toWalletId===id).length;
     mgTo.innerHTML=others.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${cnt(x.id)} khoản)</option>`).join("");
