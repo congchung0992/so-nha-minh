@@ -239,6 +239,17 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 2px}
 .catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 6px}
 .catgroups{display:flex;flex-direction:column;gap:10px}
+/* lịch tháng ở Sổ */
+.cal{padding:12px 10px;gap:6px}
+.calhead,.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.calhead span{text-align:center;color:var(--muted);font-weight:600}
+.cd{min-height:58px;border:0;border-radius:12px;background:var(--surface-2);padding:5px 2px;display:flex;flex-direction:column;align-items:center;gap:1px;color:inherit;overflow:hidden}
+.cd.empty{background:none}
+.cd b{font-weight:700;line-height:1.2}
+.cd em{font-style:normal;font-weight:700;font-size:min(var(--fs-md),3.3vw);line-height:1.15;letter-spacing:-.02em;white-space:nowrap}
+.cd.sun b{color:var(--expense)}
+.cd.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cd.sel{background:var(--accent);color:var(--accent-ink)} .cd.sel em,.cd.sel.sun b{color:var(--accent-ink)}
 .catsec[hidden]{display:none}
 .cathead{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:12px;background:color-mix(in srgb,var(--c) 10%,var(--surface-2));margin-bottom:4px}
 .cathead.lone{--c:#8a94a0}
@@ -966,10 +977,21 @@ function bindMonthBreakdown(){
     b.onclick=()=>{ if (b.dataset.swiped){ delete b.dataset.swiped; return; } S.repParty=b.dataset.party||"\u0000"; render(); window.scrollTo(0,0); }; });
   bindCatDetail();
 }
+/* lịch tháng kiểu MISA: mỗi ngày ghi tổng chi (đỏ) / thu (xanh); chạm một ngày để chỉ xem khoản của ngày đó */
+function monthCalendar(all){
+  const [y,m]=S.month.split("-").map(Number), days=new Date(y,m,0).getDate(), lead=(new Date(y,m-1,1).getDay()+6)%7, today=todayStr(), per={};
+  all.forEach(t=>{ if(!isRealFlow(t)) return; const o=per[t.date]||(per[t.date]={i:0,e:0}); if(t.kind==="income") o.i+=+t.amount; else o.e+=+t.amount; });
+  const sh=n=>n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace(".0","").replace(".",",")+"tr":n>=1000?Math.round(n/1000)+"k":fmt(n);
+  let cells=""; for(let i=0;i<lead;i++) cells+=`<span class="cd empty"></span>`;
+  for(let d=1;d<=days;d++){ const ds=y+"-"+pad(m)+"-"+pad(d), o=per[ds], wd=(lead+d-1)%7;
+    cells+=`<button class="cd${ds===today?" today":""}${ds===S.bookDay?" sel":""}${wd===6?" sun":""}" data-cal="${ds}"><b>${d}</b>${o&&o.e?`<em class="out-c">${sh(o.e)}</em>`:""}${o&&o.i?`<em class="in-c">${sh(o.i)}</em>`:""}</button>`; }
+  return `<section class="card cal"><div class="calhead">${["T2","T3","T4","T5","T6","T7","CN"].map(x=>`<span>${x}</span>`).join("")}</div><div class="calgrid">${cells}</div></section>`;
+}
 function bookView(){
   if (S.repCat) return catDetailView();
   if (S.repParty!=null) return partyDetailView();
-  const list = sortTx(S.txs.filter(t=>ymOf(t.date)===S.month));
+  if (S.bookDay && ymOf(S.bookDay)!==S.month) S.bookDay=null;
+  const all = sortTx(S.txs.filter(t=>ymOf(t.date)===S.month)), list = S.bookDay ? all.filter(t=>t.date===S.bookDay) : all;
   const {inc,exp} = monthTotals(S.month);
   const groups = {}; list.forEach(t=>(groups[t.date]=groups[t.date]||[]).push(t));
   $("#view").innerHTML = `${monthBar()}
@@ -977,12 +999,15 @@ function bookView(){
     <div><span class="arrow" style="background:var(--income)">${ARROW_IN}</span><span style="min-width:0"><span>Tổng thu</span><b class="num in-c">${fmt(inc)}</b></span></div>
     <div><span class="arrow" style="background:var(--expense)">${ARROW_OUT}</span><span style="min-width:0"><span>Tổng chi</span><b class="num out-c">${fmt(exp)}</b></span></div>
   </div><div class="row between small"><span class="muted">Còn lại trong tháng</span><b class="num ${inc-exp<0?"out-c":"in-c"}">${money(inc-exp)}</b></div></div>
-  ${inc||exp ? monthBreakdown() : ""}
-  ${list.length ? `<div class="listhead"><h2>${list.length} khoản trong tháng</h2></div>` : ""}
+  ${monthCalendar(all)}
+  <div class="listhead"><h2>${S.bookDay ? `${weekday(S.bookDay)}, ${viDate(S.bookDay)} · ${list.length} khoản` : `${all.length} khoản trong tháng`}</h2>${S.bookDay?`<button class="chip" id="calAll">Cả tháng</button>`:""}</div>
   ${list.length ? Object.keys(groups).map(d=>{ const g=groups[d]; const net=g.reduce((s,t)=>s+(t.kind==="income"?+t.amount:t.kind==="expense"?-t.amount:0),0);
     return `<section class="card" style="gap:4px"><div class="dayhead"><span class="d"><b>${d.slice(8)}</b><span>${weekday(d)}<br>${monthLabel(d.slice(0,7))}</span></span><span class="num ${net<0?"out-c":"in-c"}">${net<0?"−":"+"}${fmt(Math.abs(net))}</span></div><div class="list-plain">${g.map(txRow).join("")}</div></section>`; }).join("")
-    : `<div class="card">${emptyTx("Tháng này chưa có ghi chép","Chuyển sang tháng khác hoặc bấm + để ghi.")}</div>`}`;
+    : `<div class="card">${S.bookDay?emptyTx("Ngày này chưa có ghi chép","Chọn ngày khác trên lịch hoặc bấm + để ghi."):emptyTx("Tháng này chưa có ghi chép","Chuyển sang tháng khác hoặc bấm + để ghi.")}</div>`}
+  ${inc||exp ? monthBreakdown() : ""}`;
   bindMonthBar(); bindTxRows(); bindMonthBreakdown();
+  document.querySelectorAll("[data-cal]").forEach(b=>b.onclick=()=>{ S.bookDay = S.bookDay===b.dataset.cal ? null : b.dataset.cal; render(); });
+  const ca=$("#calAll"); if(ca) ca.onclick=()=>{ S.bookDay=null; render(); };
 }
 
 /* ---------- Ghi chép ---------- */
