@@ -572,7 +572,7 @@ const NAME_HINTS = [
   [/du lich|nghi duong/,"plane"],[/bo me|ong ba|gia dinh|bieu/,"family"],[/thu cung|cho meo|\bpet\b/,"pet"],
   [/bao hiem/,"shield"],[/tra no|tra gop|khoan vay/,"receipt"],[/the thao|gym|tap luyen/,"sport"],[/\bgas\b|bep/,"gas"],
   [/luong/,"salary"],[/thuong/,"star"],[/kinh doanh|ban hang/,"store"],[/duoc tang|qua tang|li xi|duoc cho/,"gift"],[/lai tiet kiem|tiet kiem/,"piggy"],[/thu no|cho vay/,"handshake"],[/dau tu|co tuc|chung khoan/,"coins"],
-  [/\ban (sang|trua|toi|vat|com|pho|bun)|\bpho\b|\bbun\b|\bmien\b|\bchao\b|\blau\b|nha hang|quan an/,"food"]
+  [/mi tom|mi goi|\bxoi\b|banh mi|\bpho\b/,"food"],[/\ban (sang|trua|toi|vat|com|pho|bun)|\bpho\b|\bbun\b|\bmien\b|\bchao\b|\blau\b|nha hang|quan an/,"food"]
 ];
 function guessIcon(name){ const s=strip(name); for(const [re,k] of NAME_HINTS) if(re.test(s)) return k; return "other"; }
 // hạng mục & ví dùng icon màu trong icons/ (Fluent Emoji, MIT); calendar / pen giữ icon nét vì là nút giao diện
@@ -1107,6 +1107,43 @@ function parseAmountText(t){
   }
   return all.find(x=>x.unit) || all[0] || null;
 }
+/* số nói bằng chữ kiểu Việt Nam (mic hay nghe thành chữ hoặc lẫn chữ – số):
+   "năm ba nghìn" / "năm 3000" = 53.000, "hai lăm nghìn" = 25.000, "năm mươi ba nghìn", "một trăm hai nghìn" = 120.000,
+   "hai trăm rưỡi" = 250.000, "một triệu hai" = 1.200.000. Chỉ đổi cụm có đơn vị (mươi/trăm/nghìn/triệu…) để không nhầm "ba mẹ", "từ" */
+const VN_D={khong:0,mot:1,mốt:1,hai:2,ba:3,bon:4,tu:4,nam:5,lam:5,sau:6,bay:7,tam:8,chin:9};
+function parseVNAmount(t){
+  // lẫn chữ – số: "nam 3000", "nam 3.000", "nam 3 nghin" → 53 nghìn
+  let m=/\b(mot|hai|ba|bon|tu|nam|sau|bay|tam|chin)\s+(\d)(?:[.,]?000\b|\s*(?:nghin|ngan|k)\b)/.exec(t);
+  if (m) return {v:(VN_D[m[1]]*10+ +m[2])*1000, s:m.index, e:m.index+m[0].length};
+  const W="khong|mot|hai|ba|bon|tu|nam|lam|sau|bay|tam|chin|muoi|tram|linh|le|ruoi|nghin|ngan|k|trieu|cu|ty";
+  const re=new RegExp("\\b(?:(?:"+W+")\\s+)*(?:"+W+")\\b(?:\\s+(?:dong|d)\\b)?","g");
+  while ((m=re.exec(t))){
+    const words=m[0].split(/\s+/).filter(w=>w!=="dong"&&w!=="d");
+    // cụm phải bắt đầu bằng chữ số (một, hai… hoặc mười); "2 triệu rưỡi" để phần đọc số chữ số lo
+    if (/^(nghin|ngan|k|trieu|cu|ty|tram|linh|le|ruoi)$/.test(words[0]) || /\d\s*$/.test(t.slice(0,m.index))) continue;
+    if (!words.some(w=>/^(muoi|tram|nghin|ngan|k|trieu|cu|ty)$/.test(w)) || words.length<2 && !/^(muoi)$/.test(words[0])) continue;
+    let total=0, cur=0, last=null, lastScale=1, tensMark=false;
+    for (const w of words){
+      if (w in VN_D && w!=="khong" || w==="khong"){ const d=VN_D[w];
+        if (last==="muoi") cur+=d;                                 // năm mươi BA
+        else if (last==="tram") { cur+=d*10; last="tramdigit"; continue; }   // một trăm HAI (=120), bốn trăm NĂM mươi
+        else if (last==="linh"||last==="le") cur+=d;               // một trăm linh HAI
+        else if (last==="digit") cur=cur*10+d;                     // năm BA (=53), hai LĂM (=25)
+        else if (/^(nghin|ngan|k|trieu|cu|ty)$/.test(last||"")) { total+=d*lastScale/10; cur=0; last="tail"; continue; }  // một triệu HAI
+        else cur+=d;
+        last="digit"; continue; }
+      if (w==="muoi"){ cur = last==="digit" ? cur*10 : last==="tramdigit" ? cur : cur+10; last="muoi"; continue; }
+      if (w==="tram"){ cur=(cur||1)*100; last="tram"; continue; }
+      if (w==="linh"||w==="le"){ last="linh"; continue; }
+      if (w==="ruoi"){ if(last==="tram"){ cur+=50; last="muoi"; } else { total+=lastScale/2; last="tail"; } continue; }
+      const sc = w==="ty"?1e9 : (w==="trieu"||w==="cu")?1e6 : 1e3;
+      total += (cur||1)*sc; cur=0; lastScale=sc; last=w;
+    }
+    total += cur * (/^(tram|tramdigit|muoi|digit)$/.test(last||"") ? (lastScale>1?1:1000) : 1);
+    if (total>=1000) return {v:Math.round(total), s:m.index, e:m.index+m[0].length};
+  }
+  return null;
+}
 function parseSpoken(text){
   const orig=String(text||"").normalize("NFC").replace(/\s+/g," ").trim();
   // bản không dấu, giữ đúng vị trí từng ký tự để cắt được cả câu gốc
@@ -1143,7 +1180,7 @@ function parseSpoken(text){
     if (n){ if(n>=2&&n<=36){ out.split=n; mask(m.index,m.index+m[0].length); } } }
   if (fromM && out.split) out.date=startAt(fromM);
   // số tiền
-  const a=parseAmountText(t); if(a){ out.amount=a.v; mask(a.s,a.e); }
+  const a=parseVNAmount(t)||parseAmountText(t); if(a){ out.amount=a.v; mask(a.s,a.e); }
   take(/\b(nghin dong|dong|vnd)\b/);
   // ví: theo tên ví, hoặc "tiền mặt" / "thẻ" / "chuyển khoản"
   const ws=sortedWallets(), esc2=x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
@@ -1272,10 +1309,11 @@ function voiceSheet(){
     toast(S.form.amount&&(S.form.categoryId||S.form.kind==="transfer")?"Đã điền vào form, sửa thêm rồi bấm Lưu":"Đã điền, còn thiếu "+(!S.form.amount?"số tiền":"hạng mục")); };
   if (!SR){ micb.disabled=true; txt.focus(); return; }
   const start=()=>{ try{ rec=new SR(); }catch(e){ st.textContent="Không mở được mic."; return; }
-    rec.lang="vi-VN"; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1;
+    rec.lang="vi-VN"; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=5;
     let fin="";
     rec.onstart=()=>{ micb.classList.add("on"); st.textContent="Đang nghe… nói xong thì dừng một chút."; };
-    rec.onresult=e=>{ let interim=""; for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) fin+=r[0].transcript; else interim+=r[0].transcript; } txt.value=(fin+interim).trim(); show(); };
+    rec.onresult=e=>{ let interim=""; for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal){ // nhiều cách nghe: ưu tiên cách đọc ra được số tiền
+        const alts=[...r].map(x=>x.transcript); fin+=alts.find(x=>parseSpoken(x).amount)||alts[0]; } else interim+=r[0].transcript; } txt.value=(fin+interim).trim(); show(); };
     rec.onerror=e=>{ st.textContent = e.error==="not-allowed"||e.error==="service-not-allowed" ? "Chưa được phép dùng mic. Hãy cho phép mic cho trang này trong cài đặt trình duyệt." : e.error==="no-speech" ? "Chưa nghe thấy gì, bấm mic để nói lại." : "Lỗi nhận giọng nói ("+e.error+"). Bạn có thể gõ vào ô dưới."; };
     rec.onend=()=>{ micb.classList.remove("on"); if(txt.value.trim()){ st.textContent="Kiểm tra bên dưới rồi bấm “Lưu” (sai chữ thì sửa trong ô)."; show(); } };
     rec.start(); };
