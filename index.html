@@ -1320,8 +1320,8 @@ function voiceSheet(){
   // Ghi âm → máy chủ (Groq Whisper) nhận dạng: chuẩn hơn mic của điện thoại. Lỗi / không hỗ trợ thì quay về mic điện thoại.
   const canCloud = !!(S.sb && navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
   let mr=null, stream=null, actx=null, stopTimer=0, cloudBroken=false;
-  const hint = () => "Ghi chép thu chi gia đình. Số tiền nói kiểu 53 nghìn, 150k, 1 triệu 2, 2 triệu rưỡi. Hạng mục: "
-    + S.cats.filter(c=>!isGroupHead(c)).map(c=>c.name).slice(0,60).join(", ") + ". Ví: " + S.wallets.map(w=>w.name).join(", ") + ".";
+  // Whisper chỉ nhận gợi ý ngắn (~224 token): vài câu mẫu cách nói số tiền là đủ
+  const hint = () => "Ghi chép thu chi. Mì tôm 53 nghìn. Đổ xăng 80 nghìn. Tiền nhà 9 triệu rưỡi. Cafe 35k.";
   const cleanup=()=>{ clearTimeout(stopTimer); try{ stream&&stream.getTracks().forEach(t=>t.stop()); }catch(e){} try{ actx&&actx.close(); }catch(e){} stream=null; actx=null; };
   const sendAudio=async(blob,type)=>{
     st.textContent="Đang nhận dạng…"; micb.classList.add("busy");
@@ -1336,8 +1336,7 @@ function voiceSheet(){
       st.textContent = txt.value ? "Kiểm tra bên dưới rồi bấm “Lưu”." : "Chưa nghe rõ, bấm mic để nói lại.";
     }catch(e){
       if(!box.isConnected) return;
-      cloudBroken=true; st.textContent="Máy chủ nhận dạng chưa dùng được ("+e.message+"). Chuyển sang mic của điện thoại…";
-      setTimeout(()=>{ if(box.isConnected) startPhone(); }, 900);
+      cloudBroken=true; st.textContent="Máy chủ nhận dạng lỗi: "+e.message+". Bấm mic để nói lại bằng mic của điện thoại.";
     }finally{ micb.classList.remove("busy"); }
   };
   const startCloud=async()=>{
