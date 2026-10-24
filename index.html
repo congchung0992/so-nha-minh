@@ -541,6 +541,7 @@ const ICONS = {
   teddy:{c:"#c58a4a",d:'<circle cx="12" cy="13" r="6"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="7" r="2.5"/>'},
   worship:{c:"#e8902c",d:'<path d="M5 15c2 3 12 3 14 0"/><path d="M12 13c-1.5-1.5-1.5-3.5 0-6 1.5 2.5 1.5 4.5 0 6z"/>'},
   wedding:{c:"#e86aa0",d:'<path d="M12 3l7 6v11H5V9z"/><path d="M10 20v-5h4v5"/>'},
+  invest:{c:"#16a06a",d:'<path d="M3 20h18M5 16l5-5 4 3 6-7"/><path d="M15 7h5v5"/>'},
   inflow:{c:"#16a06a",d:'<path d="M12 3v11M7.5 9.5L12 14l4.5-4.5"/><path d="M3.5 14v4.5a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V14"/>'},
   cash:{c:"#16a06a",d:'<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.8"/><path d="M6 12h.01M18 12h.01"/>'},
   bank:{c:"#2f6bd0",d:'<path d="M3 9.5L12 4l9 5.5M5 10v7.5M9.5 10v7.5M14.5 10v7.5M19 10v7.5M3 20h18"/>'},
@@ -553,7 +554,7 @@ const ICONS = {
 };
 ICONS.saving.d = ICONS.piggy.d;
 const ICON_KEYS = Object.keys(ICONS).filter(k=>!["cash","saving","ewallet","transfer","calendar","pen"].includes(k));
-const WICON_KEYS = ["cash","bank","card","saving","ewallet"];
+const WICON_KEYS = ["cash","bank","card","saving","ewallet","invest"];
 const NAME_HINTS = [
   [/do dung sinh hoat cho con|do choi/,"teddy"],[/cung le|cung ram|cung gio|cung cuoi nam|thap huong|di le|le chua|nha to/,"worship"],[/cuoi hoi|dam cuoi|ma chay|dam hieu/,"wedding"],
   [/\bchong\b/,"husband"],[/\bvo gui\b|\btien vo\b|\bcho vo\b/,"wife"],
@@ -577,7 +578,7 @@ const NAME_HINTS = [
 ];
 function guessIcon(name){ const s=strip(name); for(const [re,k] of NAME_HINTS) if(re.test(s)) return k; return "other"; }
 // hạng mục & ví dùng icon màu trong icons/ (Fluent Emoji, MIT); calendar / pen giữ icon nét vì là nút giao diện
-const EMOJI_ICONS = new Set(["baby", "bag", "bank", "beauty", "bike", "bolt", "book", "breakfast", "bulb", "bus", "car", "card", "cash", "cashback", "cocktail", "coffee", "coins", "drop", "envelope", "ewallet", "family", "fee", "food", "fuel", "gas", "gem", "gift", "handshake", "hanger", "health", "home", "household", "husband", "inflow", "key", "kids", "lend", "lipstick", "loan", "market", "other", "outbox", "percent", "person", "pet", "phone", "piggy", "pill", "plane", "purse", "receipt", "salary", "saving", "school", "shield", "shirt", "sofa", "sport", "star", "stetho", "store", "tags", "teddy", "ticket", "tools", "transfer", "tv", "wedding", "wife", "wifi", "worship"]);
+const EMOJI_ICONS = new Set(["baby", "bag", "bank", "beauty", "bike", "bolt", "book", "breakfast", "bulb", "bus", "car", "card", "cash", "cashback", "cocktail", "coffee", "coins", "drop", "envelope", "ewallet", "family", "fee", "food", "fuel", "gas", "gem", "gift", "handshake", "hanger", "health", "home", "household", "husband", "inflow", "invest", "key", "kids", "lend", "lipstick", "loan", "market", "other", "outbox", "percent", "person", "pet", "phone", "piggy", "pill", "plane", "purse", "receipt", "salary", "saving", "school", "shield", "shirt", "sofa", "sport", "star", "stetho", "store", "tags", "teddy", "ticket", "tools", "transfer", "tv", "wedding", "wife", "wifi", "worship"]);
 function icoHTML(key, cls=""){ const k=ICONS[key]?key:"other", i=ICONS[k];
   if (EMOJI_ICONS.has(k)) return `<span class="ico emo ${cls}" style="--c:${i.c}" aria-hidden="true"><img src="icons/${k}.svg" alt="" decoding="async" draggable="false"></span>`;
   return `<span class="ico ${cls}" style="--c:${i.c}" aria-hidden="true"><svg viewBox="0 0 24 24">${i.d}</svg></span>`; }
@@ -586,7 +587,9 @@ function icoHTML(key, cls=""){ const k=ICONS[key]?key:"other", i=ICONS[k];
 const personIcon = n => { const s=strip(n||""); return /\b(vo|me|chi|co|ba xa|em gai)\b/.test(s) ? "wife" : /\b(chong|bo|anh|ong xa|cha)\b/.test(s) ? "husband" : "person"; };
 const catIconKey = c => (c && ICONS[c.icon] && c.icon!=="other") ? c.icon : [c?.name,c?.parent].map(n=>guessIcon(n||"")).find(k=>k!=="other")||"other";
 const catColor = c => (ICONS[catIconKey(c)]||ICONS.other).c;
-const walletIconKey = w => (w && ICONS[w.icon]) ? w.icon : ({bank:"bank",card:"card",saving:"saving",ewallet:"ewallet"}[w?.type]||"cash");
+// icon ví: icon đã chọn; nếu chỉ là icon chung "tiền mặt" thì đoán theo tên ví (đầu tư, tiết kiệm, MoMo, thẻ…) để các ví khác nhau
+const walletIconByName = n => { const s=strip(n||""); return /dau tu|chung khoan|co phieu|quy\b|vang/.test(s)?"invest" : /tiet kiem|heo|so tiet/.test(s)?"saving" : /momo|zalo ?pay|shopee ?pay|vnpay|vi dien tu/.test(s)?"ewallet" : /\bthe\b|visa|master|credit/.test(s)?"card" : /ngan hang|bank|vcb|vietcom|techcom|tcb|bidv|agri|mb\b|acb|tp ?bank|vpbank|sacom/.test(s)?"bank" : ""; };
+const walletIconKey = w => { const t={bank:"bank",card:"card",saving:"saving",ewallet:"ewallet"}[w?.type]; if (w && ICONS[w.icon] && (w.icon!=="cash" || !walletIconByName(w.name))) return w.icon; return walletIconByName(w?.name)||t||"cash"; };
 
 /* ---------- tiện ích ---------- */
 const $ = (s, el=document) => el.querySelector(s);
@@ -1656,7 +1659,7 @@ function walletsView(){
   $("#wSave").onclick=async()=>{ const name=$("#wName").value.trim(); const err=$("#wErr"); err.textContent="";
     if(!name){ err.textContent="Nhập tên ví."; return; }
     if(S.wallets.some(w=>w.id!==editing && strip(w.name)===strip(name))){ err.textContent="Đã có ví trùng tên."; return; }
-    const type=$("#wType").value; const body={name,type,icon:type,initial:parseAmount(wi.value)};
+    const type=$("#wType").value; const old=editing&&walletById(editing), body={name,type,icon: old&&old.type===type&&old.icon ? old.icon : (walletIconByName(name)||type), initial:parseAmount(wi.value)};   /* giữ icon riêng của ví khi sửa */
     try{ if(editing){ await S.db.doc("wallets/"+editing).set({...strip0(walletById(editing)),...body}); toast("Đã lưu ví"); } else { await S.db.collection("wallets").add({...body,order:(Math.max(0,...S.wallets.map(w=>w.order||0))+1),createdAt:Date.now()}); toast("Đã thêm ví"); } reset(); }catch(e){handleWriteErr(e)} };
 }
 
