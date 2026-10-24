@@ -276,6 +276,11 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .cmp .v{display:flex;flex-direction:column;align-items:flex-end;gap:2px} .cmp .v b{font-weight:800}
 .cmpkids{border-left:2px solid var(--line);margin-left:16px;padding-left:10px}
 .cmp.kid{border-top:0;padding:6px 0}
+.gbar{display:block;height:4px;border-radius:2px;background:var(--line);margin-top:5px;overflow:hidden} .gbar i{display:block;height:100%;background:#e8705a;border-radius:2px}
+.gsub{font-weight:700;margin:8px 0 2px;color:var(--muted)}
+.gm{display:grid;grid-template-columns:54px 1fr auto;align-items:center;gap:10px;width:100%;border:0;background:none;color:inherit;text-align:left;padding:5px 0}
+.gm .ml{white-space:nowrap} .gm .mb{height:8px;border-radius:4px;background:var(--line);overflow:hidden} .gm .mb i{display:block;height:100%;background:#e8705a;border-radius:4px}
+.gm b{font-weight:700;min-width:56px;text-align:right} .gm.cur .ml,.gm.cur b{color:var(--accent,#0f8f8a);font-weight:800}
 /* lịch tháng ở Sổ */
 .cal{padding:12px 10px;gap:6px}
 .calhead,.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
@@ -922,18 +927,24 @@ function spendTrendCard(ym){
   // 3) tổng 12 tháng
   const diff=totInc-totExp;
   const totals = `<div class="ttot"><div><span>Tổng thu</span><b class="num in-c">${shortMoney(totInc)}</b></div><div><span>Tổng chi</span><b class="num out-c">${shortMoney(totExp)}</b></div><div><span>${diff<0?"Hụt":"Dư"}</span><b class="num ${diff<0?"out-c":"in-c"}">${shortMoney(Math.abs(diff))}</b></div></div>`;
-  // 4) từng nhóm: tháng này so với trung bình các tháng trước
+  // 4) từng nhóm: tổng 12 tháng, bấm để xem từng tháng
   const groupOf=id=>{ const c=catById(id); return (c?.parent||c?.name||"Không rõ").trim(); };
-  const g={}; S.txs.forEach(t=>{ if(t.kind!=="expense"||!isRealFlow(t)||!t.categoryId) return; const m=ymOf(t.date), isCur=m===ym; if(!isCur && !inPrev(t)) return;
-    const id=t.categoryId, v=+t.amount, k=groupOf(id), o=g[k]||(g[k]={now:0,prev:0,kids:{}}), kk=o.kids[id]||(o.kids[id]={now:0,prev:0});
-    if(isCur){ o.now+=v; kk.now+=v; } else { o.prev+=v; kk.prev+=v; } });
-  const rows=Object.entries(g).map(([k,o])=>({k,...o,avg:o.prev/nPrev})).filter(r=>r.now||r.avg>=1000).sort((a,b)=>b.now-a.now||b.avg-a.avg);
+  const mIdx=Object.fromEntries(months.map((m,i)=>[m,i])), g={};
+  S.txs.forEach(t=>{ if(t.kind!=="expense"||!isRealFlow(t)||!t.categoryId) return; const i=mIdx[ymOf(t.date)]; if(i==null) return;
+    const id=t.categoryId, v=+t.amount, k=groupOf(id), o=g[k]||(g[k]={tot:0,m:Array(N).fill(0),kids:{}});
+    o.tot+=v; o.m[i]+=v; o.kids[id]=(o.kids[id]||0)+v; });
+  const rows=Object.entries(g).map(([k,o])=>({k,...o})).filter(r=>r.tot>=1000).sort((a,b)=>b.tot-a.tot);
   const gIcon=k=>{ const h=S.cats.find(c=>!c.parent&&c.name===k&&c.kind==="expense"); return h?catIconKey(h):catIconKey(catById(Object.keys(g[k].kids)[0])); };
-  const lim=S.homeMoreCats?rows.length:6;
-  const row=r=>{ const kids=Object.entries(r.kids), many=kids.length>1, open=S.homeOpenGroup===r.k;
-    const line=`<button class="cmp" ${many?`data-group="${esc(r.k)}"`:`data-cattrend="${esc(kids[0][0])}"`}>${icoHTML(gIcon(r.k),"sm")}<span class="t"><b>${esc(r.k)}</b><span class="muted">TB ${shortMoney(r.avg)}${isNow?" cùng kỳ":"/tháng"}${many?` · ${kids.length} mục ${open?"▴":"▾"}`:""}</span></span><span class="v"><b class="num">${r.now?shortMoney(r.now):"0"}</b>${deltaPill(r.now,r.avg)}</span></button>`;
-    return line+(many&&open?`<div class="cmpkids">${kids.sort((a,b)=>b[1].now-a[1].now||b[1].prev-a[1].prev).map(([id,o])=>{ const c=catById(id), av=o.prev/nPrev; return `<button class="cmp kid" data-cattrend="${esc(id)}">${icoHTML(catIconKey(c),"xs")}<span class="t"><b>${esc(c?.name||"?")}</b><span class="muted">TB ${shortMoney(av)}${isNow?" cùng kỳ":"/tháng"}</span></span><span class="v"><b class="num">${o.now?shortMoney(o.now):"0"}</b>${deltaPill(o.now,av)}</span></button>`; }).join("")}</div>`:""); };
-  const list = `<div class="cmphead"><h3>Từng nhóm so với trung bình</h3></div>
+  const lim=S.homeMoreCats?rows.length:6, topTot=rows[0]?.tot||1;
+  const row=r=>{ const open=S.homeOpenGroup===r.k, used=r.m.filter(v=>v>0).length, pct=totExp?r.tot/totExp*100:0;
+    const line=`<button class="cmp" data-group="${esc(r.k)}" aria-expanded="${open}">${icoHTML(gIcon(r.k),"sm")}<span class="t"><b>${esc(r.k)}</b><span class="muted">TB ${shortMoney(r.tot/N)}/tháng · ${pct<1?"<1":Math.round(pct)}% tổng chi ${open?"▴":"▾"}</span><span class="gbar"><i style="width:${r.tot/topTot*100}%"></i></span></span><span class="v"><b class="num">${shortMoney(r.tot)}</b><span class="muted">${used}/${N} tháng</span></span></button>`;
+    if(!open) return line;
+    const mx=Math.max(1,...r.m);
+    const mrows=months.map((m,i)=>({m,v:r.m[i]})).reverse().map(x=>`<button class="gm${x.m===ym?" cur":""}" data-trend-m="${x.m}"><span class="ml">T${Number(x.m.slice(5))}/${x.m.slice(2,4)}</span><span class="mb"><i style="width:${x.v/mx*100}%"></i></span><b class="num">${x.v?shortMoney(x.v):"–"}</b></button>`).join("");
+    const kids=Object.entries(r.kids).sort((a,b)=>b[1]-a[1]);
+    const krows=kids.length>1?`<div class="gsub">Theo hạng mục</div>`+kids.map(([id,v])=>{ const c=catById(id); return `<button class="cmp kid" data-cattrend="${esc(id)}">${icoHTML(catIconKey(c),"xs")}<span class="t"><b>${esc(c?.name||"?")}</b><span class="muted">${Math.round(v/r.tot*100)}% của nhóm</span></span><span class="v"><b class="num">${shortMoney(v)}</b></span></button>`; }).join(""):"";
+    return line+`<div class="cmpkids"><div class="gsub">Từng tháng</div>${mrows}${krows}</div>`; };
+  const list = `<div class="cmphead"><h3>Từng nhóm trong ${N} tháng</h3></div>
     <div class="cmplist">${rows.slice(0,lim).map(row).join("")}</div>
     ${rows.length>6?`<button class="link" id="moreCats">${S.homeMoreCats?"Thu gọn":`Xem thêm ${rows.length-6} nhóm`}</button>`:""}`;
   return `<section class="card"><div class="row between"><h2>Chi tiêu ${N} tháng</h2></div>${head}${chart}${totals}${list}</section>`;
