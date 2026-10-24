@@ -592,7 +592,7 @@ function guessIcon(name){ const s=strip(name); for(const [re,k] of NAME_HINTS) i
 // hạng mục & ví dùng icon màu trong icons/ (Fluent Emoji, MIT); calendar / pen giữ icon nét vì là nút giao diện
 const EMOJI_ICONS = new Set(["baby", "bag", "bank", "beauty", "bike", "bolt", "book", "breakfast", "bulb", "bus", "car", "card", "cash", "cashback", "cocktail", "coffee", "coins", "drop", "envelope", "ewallet", "family", "fee", "food", "fuel", "gas", "gem", "gift", "handshake", "hanger", "health", "home", "household", "husband", "inflow", "invest", "key", "kids", "lend", "lipstick", "loan", "market", "other", "outbox", "percent", "person", "pet", "phone", "piggy", "pill", "plane", "purse", "receipt", "salary", "saving", "school", "shield", "shirt", "sofa", "sport", "star", "stetho", "store", "tags", "teddy", "ticket", "tools", "transfer", "tv", "wedding", "wife", "wifi", "worship"]);
 function icoHTML(key, cls=""){ const k=ICONS[key]?key:"other", i=ICONS[k];
-  if (EMOJI_ICONS.has(k)) return `<span class="ico emo ${cls}" style="--c:${i.c}" aria-hidden="true"><img src="icons/${k}.svg?v=2" alt="" decoding="async" draggable="false"></span>`;
+  if (EMOJI_ICONS.has(k)) return `<span class="ico emo ${cls}" style="--c:${i.c}" aria-hidden="true"><img src="icons/${k}.svg?v=3" alt="" decoding="async" draggable="false"></span>`;
   return `<span class="ico ${cls}" style="--c:${i.c}" aria-hidden="true"><svg viewBox="0 0 24 24">${i.d}</svg></span>`; }
 // icon "other" (…) được lưu khi chưa đoán ra hình: đoán lại theo tên, rồi theo nhóm cha
 // icon thành viên theo tên gọi: Vợ → cô dâu, Chồng → chú rể
