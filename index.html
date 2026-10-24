@@ -1082,6 +1082,13 @@ const shortAmt = n => n>=1e6 ? (n/1e6).toFixed(n%1e6?1:0).replace(".",",")+"tr" 
 // hạng mục dùng nhiều nhất 3 tháng gần đây
 // chỉ lấy hạng mục chi tiết: bỏ mục chung của nhóm (mục mà các mục khác nhận làm nhóm cha)
 const isGroupHead = c => !!c && !c.parent && S.cats.some(x=>x.kind===c.kind && x.parent===c.name);
+/* Tìm hạng mục sẵn có khi nhập file: đúng tên+nhóm → đúng tên (bỏ qua nhóm) → trùng một vế tách bởi dấu phẩy ("Cafe, nước uống" ↔ "Cafe") */
+function matchCat(kind, name, par){
+  const key=strip(name), pool=S.cats.filter(c=>c.kind===kind), parts=x=>strip(x).split(/\s*,\s*/).filter(Boolean), p=parts(name);
+  return pool.find(c=>strip(c.name)===key && strip(c.parent||"")===strip(par||""))
+    || pool.find(c=>strip(c.name)===key && !isGroupHead(c)) || pool.find(c=>strip(c.name)===key)
+    || pool.find(c=>!isGroupHead(c) && parts(c.name).some(x=>p.includes(x)));
+}
 function frequentCats(kind, n=8){
   const since=dateAdd(todayStr(),-90), cnt={};
   S.txs.forEach(t=>{ const c=catById(t.categoryId); if(t.kind===kind&&c&&t.date>=since&&!isGroupHead(c)) cnt[t.categoryId]=(cnt[t.categoryId]||0)+1; });
@@ -1965,7 +1972,7 @@ function buildStc(){
     let n=newWallets.find(x=>strip(x.name)===strip(name)); if(!n){ n={name,initial:initial||0}; newWallets.push(n); } return {id:null,name:n.name}; };
   const category=(kind,parent,child)=>{ const name=child||parent||"Khác", par=child?parent:"";
     const hit=c=>c.kind===kind && strip(c.name)===strip(name) && strip(c.parent||"")===strip(par);
-    let cat=S.cats.find(hit)||newCats.find(hit); if(!cat){ cat={name,parent:par,kind,icon:guessIcon(name),_new:true}; newCats.push(cat); } return cat; };
+    let cat=matchCat(kind,name,par)||newCats.find(hit); if(!cat){ cat={name,parent:par,kind,icon:guessIcon(name),_new:true}; newCats.push(cat); } return cat; };
   const sheets=st.stc.map(s=>({...s, w:wallet(s.name, s.open), n:0}));
   for (const sh of sheets){
     for (const [ri,r] of sh.rows.entries()){
@@ -2158,7 +2165,7 @@ function buildTcb(){
   const st=S.importState, d=st.tcb; const items=[], newCats=[]; const have=new Set(S.txs.map(t=>t.id)), seen=new Set();
   let dupes=0, sumIn=0, sumOut=0, guessed=0, learned=0, internal=0, from=null, to=null;
   const learn=tcbLearned();
-  const findOrNew=(kind,name,icon,parent="")=>{ const hit=c=>c.kind===kind && strip(c.name)===strip(name); let c=S.cats.find(hit)||newCats.find(hit); if(!c){ c={name,parent,kind,icon:icon||guessIcon(name),_new:true}; newCats.push(c); } return c; };
+  const findOrNew=(kind,name,icon,parent="")=>{ const hit=c=>c.kind===kind && strip(c.name)===strip(name); let c=matchCat(kind,name,parent)||newCats.find(hit); if(!c){ c={name,parent,kind,icon:icon||guessIcon(name),_new:true}; newCats.push(c); } return c; };
   const DEBT_NAME={borrow:["income","Đi vay"],repay:["expense","Trả nợ"],collect:["income","Thu nợ"],lend:["expense","Cho vay"]};
   d.rows.forEach((r,i)=>{
     const kind=r.out>0?"expense":"income", amount=r.out||r.inn;
@@ -2350,7 +2357,7 @@ function toNum(v){
 function buildImport(){
   const st=S.importState, m=st.map; const items=[]; let skipped=0, transfers=0, sumIn=0, sumOut=0, dupes=0, guessed=0, from=null, to=null;
   const newCats=[], newWallets=[]; const seen=new Set(); const have=new Set(S.txs.map(t=>t.id));
-  const findCat=(name,kind)=>{ const key=strip(name); return S.cats.find(c=>c.kind===kind&&strip(c.name)===key) || newCats.find(c=>c.kind===kind&&strip(c.name)===key); };
+  const findCat=(name,kind)=>{ const key=strip(name); return matchCat(kind,name) || newCats.find(c=>c.kind===kind&&strip(c.name)===key); };
   const g=(row,f)=> m[f]==null ? "" : row[m[f]];
   const tcbNew = st.defWallet==="__tcb";
   if (tcbNew) newWallets.push("Techcombank");
