@@ -585,7 +585,8 @@ const NAME_HINTS = [
   [/du lich|nghi duong/,"plane"],[/bo me|ong ba|gia dinh|bieu/,"family"],[/thu cung|cho meo|\bpet\b/,"pet"],
   [/bao hiem/,"shield"],[/tra no|tra gop|khoan vay/,"receipt"],[/the thao|gym|tap luyen/,"sport"],[/\bgas\b|bep/,"gas"],
   [/luong/,"salary"],[/thuong/,"star"],[/kinh doanh|ban hang/,"store"],[/duoc tang|qua tang|li xi|duoc cho/,"gift"],[/lai tiet kiem|tiet kiem/,"piggy"],[/thu no|cho vay/,"handshake"],[/dau tu|co tuc|chung khoan/,"coins"],
-  [/mi tom|mi goi|\bxoi\b|banh mi|\bpho\b/,"food"],[/\ban (sang|trua|toi|vat|com|pho|bun)|\bpho\b|\bbun\b|\bmien\b|\bchao\b|\blau\b|nha hang|quan an/,"food"]
+  [/mi tom|mi goi|\bxoi\b|banh mi|\bpho\b/,"food"],[/\ban (sang|trua|toi|vat|com|pho|bun)|\bpho\b|\bbun\b|\bmien\b|\bchao\b|\blau\b|nha hang|quan an/,"food"],
+  [/\brau\b|cu qua|hoa qua|trai cay|\bthit\b|\bca\b(?! phe)|\btom\b|\btrung\b|\bgao\b|nuoc mam|dau an|gia vi|\bhanh\b|\btoi\b(?! (nay|qua))|\bdau phu\b|\bsuon\b/,"market"]
 ];
 function guessIcon(name){ const s=strip(name); for(const [re,k] of NAME_HINTS) if(re.test(s)) return k; return "other"; }
 // hạng mục & ví dùng icon màu trong icons/ (Fluent Emoji bản Color, MIT; xuất sẵn PNG 144px để iPhone hiển thị nét); calendar / pen giữ icon nét vì là nút giao diện
@@ -1202,7 +1203,8 @@ function parseVNAmount(t){
   return null;
 }
 function parseSpoken(text){
-  const orig=String(text||"").normalize("NFC").replace(/\s+/g," ").trim();
+  // máy nghe đôi khi tách số: "58.000" → "5 8.000" → ghép lại
+  const orig=String(text||"").normalize("NFC").replace(/\s+/g," ").trim().replace(/\b(\d{1,2}) (\d{1,3}(?:\.\d{3})+)\b/g,"$1$2");
   // bản không dấu, giữ đúng vị trí từng ký tự để cắt được cả câu gốc
   let t=[...orig].map(ch=>(ch.trim()? strip(ch) : " ")||ch).join("");
   if (t.length!==orig.length) t=strip(orig);
