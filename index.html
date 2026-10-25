@@ -1280,20 +1280,37 @@ function parseSpoken(text){
       .sort((p,q)=>(/do dac|noi that|dien may|gia dung/.test(strip(q.name))-/do dac|noi that|dien may|gia dung/.test(strip(p.name)))*(/may|tivi|tu lanh|dieu hoa|ban ghe|noi that|laptop/.test(ts)?1:0)||(use[q.id]||0)-(use[p.id]||0))[0];
     if (shop) out.categoryId=shop.id; }
   out.kind=kind;
+  out.dateSaid = out.date!==todayStr() || /\b(hom|sang|trua|chieu|toi) nay\b/.test(strip(orig));
   out.cands=ranked.filter(([id])=>catById(id).kind===kind).slice(0,4).map(([id])=>id);
   // ghi chú = phần còn lại của câu gốc (giữ dấu), bỏ động từ mở đầu
   let note=[...orig].filter((_,i)=>keep[i]).join("").replace(/\s+/g," ").replace(/^\s*(chi|mua|trả|tiêu|thu|nhận|nhận được)\s+/i,"").replace(/^[\s,.-]+|[\s,.-]+$/g,"");
   out.note = note ? note[0].toUpperCase()+note.slice(1) : "";
   return out;
 }
+/* sửa bằng giọng nói: chỉ đổi phần được nói ra (số tiền, ngày, hạng mục, ví, "ghi chú …"), phần còn lại giữ nguyên */
+function parseEdit(text, base){
+  let v=String(text||"").normalize("NFC").replace(/^\s*(sửa|đổi|chuyển)(\s+lại)?(\s+(thành|sang))?\s+/i,"").replace(/\bhạng mục\s+/gi,"");
+  let note=null; const nm=v.match(/\b(ghi chú|nội dung)\s*(là|thành|:)?\s*(.*)$/i);
+  if (nm){ note=nm[3].replace(/^[\s,.:-]+|[\s,.-]+$/g,""); v=v.slice(0,nm.index); note=note?note[0].toUpperCase()+note.slice(1):""; }
+  const p=v.trim()?parseSpoken(v):{date:todayStr(),kind:base.kind,cands:[]}, out={...base,cands:p.cands||[],chg:[]};
+  const set=(k,val,label)=>{ if(val!=null && val!==base[k]){ out[k]=val; out.chg.push(label); } };
+  set("amount",p.amount||null,"số tiền");
+  if (p.dateSaid) set("date",p.date,"ngày");
+  if (p.kind==="transfer"){ set("kind","transfer","loại"); set("walletId",p.walletId,"ví"); set("toWalletId",p.toWalletId,"ví nhận"); out.categoryId=""; }
+  else { if (p.categoryId){ set("kind",p.kind,"loại"); set("categoryId",p.categoryId,"hạng mục"); } set("walletId",p.walletId||null,"ví"); }
+  if (p.split>1) set("split",p.split,"chia tháng");
+  if (note!=null) set("note",note,"ghi chú");
+  return out;
+}
 function voiceSheet(){
+  const editing=!!S.editId, base=editing?{...S.form}:null;
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   let box=$("#vsheet"); if(box) box.remove();
   box=document.createElement("div"); box.id="vsheet"; box.className="vsheet";
   box.innerHTML=`<div class="vpanel" role="dialog" aria-label="Ghi bằng giọng nói">
-    <div class="row between"><h2>Nói để ghi</h2><button class="chip" id="vClose">Đóng</button></div>
+    <div class="row between"><h2>${editing?"Nói để sửa":"Nói để ghi"}</h2><button class="chip" id="vClose">Đóng</button></div>
     <button class="vmic" id="vMic" aria-label="Bắt đầu nói"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></button>
-    <div class="small muted" id="vStatus">${SR?"Bấm mic rồi nói, ví dụ: “cafe 35 nghìn hôm qua”, “đổ xăng 80k bằng thẻ”, “nhận lương 15 triệu”.":"Trình duyệt này chưa hỗ trợ nhận giọng nói. Bấm vào ô dưới rồi dùng nút mic trên bàn phím điện thoại để đọc."}</div>
+    <div class="small muted" id="vStatus">${editing?"Nói phần cần sửa, ví dụ: “21 triệu”, “hôm qua”, “đồ dùng cho con”, “bằng thẻ”, “ghi chú mua laptop”. Phần không nói sẽ giữ nguyên.":SR?"Bấm mic rồi nói, ví dụ: “cafe 35 nghìn hôm qua”, “đổ xăng 80k bằng thẻ”, “nhận lương 15 triệu”.":"Trình duyệt này chưa hỗ trợ nhận giọng nói. Bấm vào ô dưới rồi dùng nút mic trên bàn phím điện thoại để đọc."}</div>
     <textarea class="input" id="vText" rows="2" placeholder="Hoặc gõ: cafe 35k hôm qua"></textarea>
     <div class="vprev" id="vPrev" hidden></div>
     <div class="vcatbox" id="vCats" hidden></div>
@@ -1303,10 +1320,10 @@ function voiceSheet(){
   let rec=null, parsed=null, pickedCat=null, typedAmt=0, lastText="";
   const show=()=>{ if(!box.isConnected) return; const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
     if (v!==lastText){ pickedCat=null; typedAmt=0; lastText=v; }
-    parsed=parseSpoken(v); if(!parsed.amount && typedAmt) parsed.amount=typedAmt; const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
+    parsed=editing?parseEdit(v,base):parseSpoken(v); if(!parsed.amount && typedAmt) parsed.amount=typedAmt; const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
     const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
     prev.hidden=false;
-    prev.innerHTML=`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
+    prev.innerHTML=(editing?`<div class="vchg"><span>${parsed.chg.length?"Sẽ sửa":"Chưa nghe ra phần cần sửa"}</span><b>${parsed.chg.length?esc(parsed.chg.join(", ")):"Thử nói lại"}</b></div>`:"")+`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
       <div class="${parsed.amount?"":"miss"}"><span>${parsed.split>1&&parsed.kind!=="transfer"?"Tổng tiền":"Số tiền"}</span>${parsed.amount&&!typedAmt?`<b class="num">${fmtExact(parsed.amount)} đ</b>`:`<input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${typedAmt?fmtExact(typedAmt):""}" aria-label="Số tiền">`}</div>
       ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div class="${c?"":"miss"}"><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"Bắt buộc chọn ↓"}</b></div>`}
       <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
@@ -1319,6 +1336,7 @@ function voiceSheet(){
     renderCats(parsed.kind, autoCat, parsed.cands||[]); checkNeed(); };
   // bắt buộc đủ số tiền + hạng mục (+ ví) mới cho lưu; báo rõ còn thiếu gì
   const buildForm=()=>{ const f=S.form||blankForm();
+    if (editing){ const {cands,chg,...g}=parsed; return {...f,...g,amount:parsed.amount||""}; }
     return {...f,kind:parsed.kind,date:parsed.date,amount:parsed.amount||"",note:parsed.note||"",split:parsed.kind==="transfer"?1:(parsed.split||1),
       categoryId:parsed.kind==="transfer"?"":(parsed.categoryId||""),
       walletId:parsed.walletId||f.walletId, toWalletId:parsed.toWalletId||f.toWalletId}; };
@@ -1333,7 +1351,7 @@ function voiceSheet(){
   sv.onclick=async()=>{ const m=missing();
     if (m.length){ need.classList.remove("shake"); void need.offsetWidth; need.classList.add("shake"); if(m.includes("hạng mục")) cbox.scrollIntoView({block:"start",behavior:"smooth"}); return; }
     sv.disabled=true; sv.textContent="Đang lưu…";
-    S.editId=null; S.form=buildForm(); formView();
+    if(!editing) S.editId=null; S.form=buildForm(); formView();
     const ok=await saveForm();
     if (ok) close(); else { sv.disabled=false; sv.textContent="Lưu"; need.hidden=false; need.textContent="⚠ "+($("#fErr")?.textContent||"Chưa lưu được, thử lại."); } };
   // chọn / đổi hạng mục: gợi ý ở trên, bên dưới là toàn bộ hạng mục có ô tìm kiếm (chỉ vẽ lại khi đổi loại thu/chi)
@@ -1363,6 +1381,7 @@ function voiceSheet(){
   $("#vClose").onclick=close; box.onclick=e=>{ if(e.target===box) close(); };
   ap.onclick=()=>{ if(!parsed) return; S.form=buildForm();
     close(); formView(); window.scrollTo(0,0);
+    if(editing){ toast("Đã sửa vào form, kiểm tra rồi bấm Lưu"); return; }
     toast(S.form.amount&&(S.form.categoryId||S.form.kind==="transfer")?"Đã điền vào form, sửa thêm rồi bấm Lưu":"Đã điền, còn thiếu "+(!S.form.amount?"số tiền":"hạng mục")); };
   const startPhone=()=>{ if(!SR){ st.textContent="Không mở được mic. Bạn gõ hoặc dùng mic của bàn phím vào ô dưới."; txt.focus(); return; } try{ rec=new SR(); }catch(e){ st.textContent="Không mở được mic."; return; }
     rec.lang="vi-VN"; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=5;
@@ -1448,7 +1467,7 @@ function formView(){
   const freq = f.kind==="transfer" ? [] : frequentCats(f.kind);
   $("#view").innerHTML = `
   <section class="kindhead k-${f.kind}">
-    <div class="row between"><h2>${editing?"Sửa ghi chép":"Ghi chép mới"}</h2>${editing?`<span class="small muted">Người nhập: ${esc(byName(f.by))}</span>`:ro?"":`<button class="micbtn" id="fMic" aria-label="Ghi bằng giọng nói"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>Nói để ghi</button>`}</div>
+    <div class="row between"><h2>${editing?"Sửa ghi chép":"Ghi chép mới"}</h2>${editing&&ro?`<span class="small muted">Người nhập: ${esc(byName(f.by))}</span>`:ro?"":`<button class="micbtn" id="fMic" aria-label="${editing?"Sửa bằng giọng nói":"Ghi bằng giọng nói"}"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>${editing?"Nói để sửa":"Nói để ghi"}</button>`}</div>${editing&&!ro?`<div class="small muted" style="margin-top:-6px">Người nhập: ${esc(byName(f.by))}</div>`:""}
     ${ro?`<div class="note">Bạn đang chỉ có quyền xem sổ này.</div>`:""}
     <div class="seg" role="group" aria-label="Loại">${[["expense","Chi tiền"],["income","Thu tiền"],["transfer","Chuyển ví"]].map(([k,l])=>`<button data-k="${k}" aria-pressed="${f.kind===k}">${l}</button>`).join("")}</div>
     <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="0" value="${f.amount?fmtExact(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
@@ -1475,7 +1494,7 @@ function formView(){
   <div class="err" id="fErr" role="alert"></div>
   ${editing && !ro ? `<button class="btn ghost" id="fDup">Ghi thêm một khoản giống thế này (ngày hôm nay)</button>` : ""}
   <div class="btnrow">${editing?`<button class="btn ghost" id="fCancel">Huỷ</button>`:""}<button class="btn" id="fSave" ${ro?"disabled":""}>${editing?"Lưu thay đổi":"Lưu ghi chép"}</button></div>
-  <div class="fabside">${ro||editing?"":`<button class="mic" id="fMicFab" aria-label="Ghi bằng giọng nói" title="Nói để ghi"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>`}${ro?"":`<button class="ok" id="fSaveFab" aria-label="${editing?"Lưu thay đổi":"Lưu ghi chép"}" title="Lưu"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Lưu</span></button>`}${editing?`<button class="no" id="fCancelFab" aria-label="Huỷ" title="Huỷ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:""}</div>
+  <div class="fabside">${ro?"":`<button class="mic" id="fMicFab" aria-label="${editing?"Sửa bằng giọng nói":"Ghi bằng giọng nói"}" title="${editing?"Nói để sửa":"Nói để ghi"}"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>`}${ro?"":`<button class="ok" id="fSaveFab" aria-label="${editing?"Lưu thay đổi":"Lưu ghi chép"}" title="Lưu"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Lưu</span></button>`}${editing?`<button class="no" id="fCancelFab" aria-label="Huỷ" title="Huỷ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:""}</div>
   ${editing && !ro ? (S.confirmDel ? `<div class="note row between" style="flex-wrap:wrap"><span>Xoá hẳn khoản này?</span><span class="row"><button class="chip" id="fDelNo">Không</button><button class="btn danger" id="fDelYes" style="min-height:38px;padding:8px 14px">Xoá</button></span></div>` : `<button class="btn danger" id="fDel">Xoá ghi chép</button>`) : ""}`;
   const amt = $("#fAmount");
   amt.addEventListener("input",()=>{ const n=parseAmount(amt.value); f.amount=n||""; amt.value=n?fmtExact(n):""; });
