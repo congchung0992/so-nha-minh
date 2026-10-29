@@ -276,6 +276,11 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .cmp .v{display:flex;flex-direction:column;align-items:flex-end;gap:2px} .cmp .v b{font-weight:800}
 .cmpkids{border-left:2px solid var(--line);margin-left:16px;padding-left:10px}
 .cmp.kid{border-top:0;padding:6px 0}
+.ledrow{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;color:inherit;text-align:left;padding:10px 0;border-top:1px solid var(--line)}
+.cmplist > .ledrow:first-child{border-top:0} .ledrow .t{flex:1;min-width:0;display:flex;flex-direction:column} .ledrow .t b{overflow-wrap:anywhere}
+.ledrow .v{display:flex;align-items:center;gap:6px;text-align:right} .ledrow .v b{font-weight:800} .ledrow .chev{color:var(--muted)}
+.gbar.paid i{background:#2f9e6b} .ledlist{padding:0 0 8px 42px}
+.ledunk{margin-top:10px;padding:10px;border-radius:12px;background:var(--surface-2)} .ledasg{border-top:1px solid var(--line);padding-top:4px} .ledasg select{margin:4px 0 8px}
 .gbar{display:block;height:4px;border-radius:2px;background:var(--line);margin-top:5px;overflow:hidden} .gbar i{display:block;height:100%;background:#e8705a;border-radius:2px}
 .gsub{font-weight:700;margin:8px 0 2px;color:var(--muted)}
 .gm{display:grid;grid-template-columns:54px 1fr auto 14px;align-items:center;gap:10px;width:100%;border:0;background:none;color:inherit;text-align:left;padding:5px 0}
@@ -774,6 +779,65 @@ function legend(rows,total,limit=5){
 
 /* ---------- Tổng quan ---------- */
 /* bảng chi tiết khi bấm dòng "Đi vay chưa trả" / "Cho vay chưa thu" */
+/* bảng tổng hợp: đang nợ ai / đang cho ai vay / đang đầu tư vào đâu — tên người (khoản đầu tư) lấy từ ghi chú:
+   "Vay Mẹ Tuyết", "Cho Nhàn Nhi vay", "Nhàn Nhi trả nợ", "Trả nợ Mẹ Hoa", "Đầu tư đất mảnh Phong Phú", "Tên · nội dung" */
+function ledgerName(note){
+  const seg=String(note||"").split(" · ")[0].replace(/\s+/g," ").trim(); let m;
+  const pats=[/^(?:đi\s+)?(?:vay|mượn)\s+(?:của\s+|tiền\s+)?(.+)$/i, /^cho\s+(.+?)\s+(?:vay|mượn)\b/i, /^(.+?)\s+trả\s+(?:nợ|tiền|lại)\b/i,
+    /^trả\s+(?:nợ|lãi|góp|tiền)?\s*(?:cho\s+)?(.+)$/i, /^(?:thu\s+nợ|thu\s+hồi|rút\s+về|rút|bán)\s+(?:tiền\s+)?(.+)$/i, /^đầu\s+tư\s+(?:vào\s+)?(.+)$/i];
+  for (const re of pats) if ((m=seg.match(re)) && m[1].trim()) { const n=m[1].trim(); return n[0].toUpperCase()+n.slice(1); }
+  return seg ? seg[0].toUpperCase()+seg.slice(1) : "";
+}
+function ledgerData(type, wid){
+  const rows=[];   // {t, d:+1 tăng / -1 giảm}
+  if (type==="invest") S.txs.forEach(t=>{ const a=+t.amount||0;
+      if (t.kind==="transfer"){ if(t.toWalletId===wid) rows.push({t,d:a}); else if(t.walletId===wid) rows.push({t,d:-a}); }
+      else if (t.walletId===wid) rows.push({t,d:t.kind==="income"?a:-a}); });
+  else { const inK=type==="owe"?"borrow":"lend", outK=type==="owe"?"repay":"collect";
+    S.txs.forEach(t=>{ if(t.kind==="transfer") return; const k=debtKind(catById(t.categoryId)); if(k===inK) rows.push({t,d:+t.amount}); else if(k===outK) rows.push({t,d:-t.amount}); }); }
+  const people={}, keyOf=n=>strip(n).replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
+  rows.filter(r=>r.d>0).forEach(r=>{ const n=ledgerName(r.t.note)||"Chưa ghi tên", k=keyOf(n); (people[k]||(people[k]={name:n,in:0,out:0,list:[]})); });
+  const unk={name:"",in:0,out:0,list:[]};
+  rows.forEach(r=>{ let n=ledgerName(r.t.note), k=keyOf(n);
+    if (!people[k] && r.d<0){ k=Object.keys(people).find(x=>k&&(x.includes(k)||k.includes(x)))||null; }
+    const p = k&&people[k] ? people[k] : (r.d>0 ? (people[keyOf(n||"Chưa ghi tên")]) : unk);
+    if (r.d>0) p.in+=r.d; else p.out-=r.d; p.list.push(r); });
+  const list=Object.values(people).map(p=>({...p,left:p.in-p.out})).sort((a,b)=>(b.left>0)-(a.left>0)||b.left-a.left||b.in-a.in);
+  return {list, unk, rows};
+}
+function ledgerView(type, wid){
+  const W=wid&&walletById(wid); if(type==="invest" && !W){ S.homeSub=null; return homeView(); }
+  const L={owe:{title:"Đang nợ",who:"Theo người cho vay",inL:"Đã vay",outL:"Đã trả",leftL:"Còn nợ",done:"Đã trả xong",cls:"out-c",
+      hint:"Ghi tên người vào ghi chú, ví dụ “Vay Mẹ Tuyết”, “Trả nợ Mẹ Tuyết”, để số nợ của từng người tự cộng trừ."},
+    owed:{title:"Đang cho vay",who:"Theo người vay",inL:"Đã cho vay",outL:"Đã thu về",leftL:"Còn phải thu",done:"Đã thu đủ",cls:"in-c",
+      hint:"Ghi tên người vào ghi chú, ví dụ “Cho Nhàn Nhi vay”, “Nhàn Nhi trả nợ”, để số tiền từng người tự cộng trừ."},
+    invest:{title:W?.name||"Đầu tư",who:"Theo từng khoản đầu tư",inL:"Đã bỏ vào",outL:"Đã rút về",leftL:"Đang đầu tư",done:"Đã rút hết",cls:"",
+      hint:"Mỗi lần chuyển tiền vào ví đầu tư, ghi tên khoản vào ghi chú, ví dụ “Đầu tư đất mảnh Phong Phú”; khi rút về ghi “Rút đất mảnh Phong Phú”."}}[type];
+  const {list,unk}=ledgerData(type,wid), tin=list.reduce((s,p)=>s+p.in,0)+unk.in, tout=list.reduce((s,p)=>s+p.out,0)+unk.out, left=tin-tout;
+  const active=list.filter(p=>p.left>0), ini=n=>{ const w=n.split(/\s+/).filter(x=>/^\p{L}/u.test(x)); return ((w[0]||"?")[0]+(w.length>1?w[w.length-1][0]:"")).toUpperCase(); };
+  const txl=arr=>sortTx(arr.map(r=>r.t)).map(t=>{ const r=arr.find(x=>x.t===t), c=catById(t.categoryId);
+    return `<button class="tx" data-id="${esc(t.id)}">${icoHTML(t.kind==="transfer"?"transfer":catIconKey(c))}<div class="mid"><div class="t">${esc(t.note||c?.name||"")}</div><div class="s">${viDate(t.date)}${c?" · "+esc(c.name):""}</div></div><div class="amt num ${r.d>0?"in-c":"out-c"}">${r.d>0?"+":"−"}${fmt(Math.abs(r.d))}</div></button>`; }).join("");
+  const prow=(p,i)=>{ const open=S.ledOpen===p.name, paid=p.in?Math.min(100,p.out/p.in*100):0;
+    return `<button class="ledrow" data-led="${esc(p.name)}" aria-expanded="${open}"><span class="ico sm av" style="--c:${rankColor(i)}">${esc(ini(p.name))}</span>
+      <span class="t"><b>${esc(p.name)}</b><span class="muted">${p.left>0&&left>0?Math.round(p.left/left*100)+"% · ":""}${L.inL.toLowerCase()} ${shortMoney(p.in)}${p.out?` · ${L.outL.toLowerCase()} ${shortMoney(p.out)}`:""}</span>
+      ${p.out?`<span class="gbar paid"><i style="width:${paid}%"></i></span>`:""}</span>
+      <span class="v">${p.left>0?`<b class="num ${L.cls}">${money(p.left)}</b>`:p.left<0?`<b class="num">dư ${money(-p.left)}</b>`:`<em class="tag">${L.done}</em>`}<span class="chev">${open?"▴":"▾"}</span></span></button>
+      ${open?`<div class="ledlist list-plain">${txl(p.list)}</div>`:""}`; };
+  const names=list.map(p=>p.name);
+  $("#view").innerHTML = `<div class="listhead"><button class="chip" id="back">‹ Tổng quan</button></div>
+  <section class="balance">${type==="invest"?`<div class="row">${icoHTML(walletIconKey(W),"lg")}<div style="min-width:0">`:"<div><div>"}<div class="label">${esc(L.title)}</div><div class="big num ${L.cls}">${money(left)}</div><div class="small muted">${active.length} ${type==="invest"?"khoản đang đầu tư":type==="owe"?"người đang cho mình vay":"người đang vay mình"}</div></div></div>
+    <div class="nw"><div><span>${L.inL}</span><b class="num">${money(tin)}</b></div><div><span>${L.outL}</span><b class="num">${money(tout)}</b></div></div></section>
+  <section class="card"><h2>${L.who}</h2>
+    <div class="cmplist">${list.map(prow).join("")||emptyTx("Chưa có khoản nào",L.hint)}</div>
+    ${unk.list.length?`<div class="ledunk"><b>${type==="invest"?"Chưa rõ thuộc khoản nào":"Chưa rõ của ai"} · ${money(unk.out-unk.in)}</b><p class="small muted" style="margin:2px 0 6px">Ghi chú không có tên trùng với ${type==="invest"?"khoản đầu tư":"ai"} ở trên. Chọn cho từng khoản:</p>
+      ${sortTx(unk.list.map(r=>r.t)).map(t=>`<div class="ledasg">${txl(unk.list.filter(r=>r.t===t))}<select class="input" data-asg="${esc(t.id)}"><option value="">Gán cho…</option>${names.map(n=>`<option>${esc(n)}</option>`).join("")}</select></div>`).join("")}</div>`:""}
+    <p class="small muted" style="margin:6px 0 0">${L.hint} Bấm vào tên để xem các khoản, bấm từng khoản để sửa.</p></section>`;
+  $("#back").onclick=()=>{ S.homeSub=null; S.ledOpen=null; render(); window.scrollTo(0,0); };
+  document.querySelectorAll("[data-led]").forEach(b=>b.onclick=()=>{ S.ledOpen=S.ledOpen===b.dataset.led?null:b.dataset.led; render(); });
+  document.querySelectorAll("[data-asg]").forEach(sel=>sel.onchange=async()=>{ const n=sel.value, t=S.txs.find(x=>x.id===sel.dataset.asg); if(!n||!t) return; sel.disabled=true;
+    try{ await S.db.doc("tx/"+t.id).set({...strip0(t), note:n+" · "+(t.note||""), updatedAt:Date.now(), updatedBy:S.uid||""}); toast("Đã gán cho "+n); }catch(e){ handleWriteErr(e); sel.disabled=false; } });
+  bindTxRows();
+}
 function debtView(type){
   const owe = type==="owe";
   const inK = owe?"borrow":"lend", outK = owe?"repay":"collect";
@@ -844,6 +908,8 @@ function homeView(){
   if (S.homeSub?.startsWith("w:")) return walletTxView(S.homeSub.slice(2));
   if (S.homeSub?.startsWith("cat:")) return catTrendView(S.homeSub.slice(4));
   if (S.homeSub?.startsWith("gm:")) return groupMonthView(...S.homeSub.slice(3).split("|"));
+  if (S.homeSub?.startsWith("inv:")) return ledgerView("invest", S.homeSub.slice(4));
+  if (S.homeSub==="owe"||S.homeSub==="owed") return ledgerView(S.homeSub);
   if (S.homeSub) return debtView(S.homeSub);
   const bal = balances(); const ym = ymOf(todayStr());
   const {owe,owed} = debts();
@@ -862,7 +928,7 @@ function homeView(){
     <div class="nw">
       <div class="nwh"><span>ĐANG CÓ</span><b class="num">${money(have)}</b></div>
       ${cashW.map(w=>line(`data-debt="w:${esc(w.id)}"`,esc(w.name),bal[w.id]||0)).join("") || line(`data-debt="wallets"`,"Tiền mặt",0)}
-      ${invW.map(w=>line(`data-debt="w:${esc(w.id)}"`,esc(w.name)+(/dau tu/.test(strip(w.name))?"":" <span class='tag fx'>đầu tư</span>"),bal[w.id]||0)).join("")}
+      ${invW.map(w=>line(`data-debt="inv:${esc(w.id)}"`,esc(w.name)+(/dau tu/.test(strip(w.name))?"":" <span class='tag fx'>đầu tư</span>"),bal[w.id]||0)).join("")}
       ${owed?line(`data-debt="owed"`,"Cho vay chưa thu",owed,"in-c","+"):""}
       <div class="nwh debt"><span>ĐANG NỢ</span><b class="num out-c">${owe?"−"+money(owe):"0 đ"}</b></div>
       ${owe?line(`data-debt="owe"`,"Đi vay chưa trả",owe,"out-c","−"):`<div class="small muted">Không có khoản vay nào chưa trả.</div>`}
