@@ -219,7 +219,20 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .kindhead{border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:12px;background:var(--surface);box-shadow:var(--shadow)}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface-2);border-radius:14px;padding:4px;gap:4px}
 .seg.four{grid-template-columns:repeat(4,1fr)} .seg.four button{padding:9px 2px} .seg button[aria-pressed="true"][data-k="debt"]{background:#7b4fd6}
-.debtseg{grid-template-columns:repeat(4,1fr)} .debtbox{gap:10px} .personchips{display:flex;flex-wrap:wrap;gap:6px} .personchips .chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)} .personchips .chip[aria-pressed="true"] .muted{color:inherit;opacity:.8}
+.debtbox{gap:12px}
+.dacts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dact{--dc:var(--expense);display:flex;align-items:center;gap:10px;text-align:left;padding:10px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);color:inherit}
+.dact.in{--dc:var(--income)} .dact span{display:flex;flex-direction:column;min-width:0} .dact b{font-weight:800} .dact small{color:var(--muted);font-size:var(--fs-md);line-height:1.25}
+.dact[aria-pressed="true"]{border-color:var(--dc);background:color-mix(in srgb,var(--dc) 10%,var(--surface));box-shadow:0 0 0 1px var(--dc) inset} .dact[aria-pressed="true"] b{color:var(--dc)}
+.dlabel{margin:2px 0 -4px}
+.pinput{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:14px;background:var(--surface-2);border:1.5px solid transparent} .pinput:focus-within{border-color:var(--accent)}
+.pinput input{flex:1;min-width:0;border:0;background:none;font:inherit;font-weight:700;color:inherit;padding:6px 0;outline:none}
+.plist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.prow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:0;border-top:1px solid var(--line);background:var(--surface);color:inherit;text-align:left}
+.prow:first-child{border-top:0} .prow .pn{flex:1;min-width:0;display:flex;flex-direction:column;overflow-wrap:anywhere} .prow .pn > b{font-weight:700} .prow .pn small{color:var(--muted);font-size:var(--fs-md)} .prow .pn small b{font-weight:800}
+.prow[aria-pressed="true"]{background:var(--accent-soft);box-shadow:inset 4px 0 0 var(--accent)}
+.dsum{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:14px;background:color-mix(in srgb,var(--expense) 9%,var(--surface-2))} .dsum.in{background:color-mix(in srgb,var(--income) 10%,var(--surface-2))}
+.dsum span{font-weight:700;color:var(--expense)} .dsum.in span{color:var(--income)} .dsum b{font-weight:800;overflow-wrap:anywhere} .dsum small{color:var(--muted);font-size:var(--fs-md)}
 .ledact{margin:0} .ledlist > .chip{margin:4px 0 6px}
 .seg button{border:0;background:transparent;border-radius:11px;padding:9px 4px;font-weight:700;color:var(--muted);font-size:var(--fs-md)}
 .seg button[aria-pressed="true"]{color:#fff}
@@ -1555,12 +1568,16 @@ function formView(){
     <label class="amountbox" for="fAmount"><input id="fAmount" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="0" value="${f.amount?fmtExact(f.amount):""}" class="num ${kc}" aria-label="Số tiền"><span>đ</span></label>
     <div class="quick">${[20000,50000,100000,200000,500000,1000000].map(n=>`<button class="chip" data-q="${n}">${fmt(n)}</button>`).join("")}<button class="chip" data-x="000">×1.000</button></div>
   </section>
-  ${f.debt?`<section class="card debtbox">
-    <div class="seg plain debtseg" role="group" aria-label="Loại vay nợ">${Object.entries(DEBT_ACT).map(([a,[,l]])=>`<button data-debt-act="${a}" aria-pressed="${f.debt===a}">${l}</button>`).join("")}</div>
-    <div class="selrow" style="border-top:0">${icoHTML("person","sm")}<div class="mid"><div class="flabel">${{borrow:"Vay của ai",repay:"Trả nợ cho ai",lend:"Cho ai vay",collect:"Ai trả nợ"}[f.debt]}</div><input id="fPerson" maxlength="80" placeholder="Ví dụ: Mẹ Tuyết, Ngân hàng Agribank" value="${esc(f.person||"")}" autocomplete="off" enterkeyhint="done"></div></div>
-    ${dItems.length?`<div class="personchips">${dItems.map(p=>`<button class="chip" data-person="${esc(p.name)}" aria-pressed="${strip(p.name)===strip(f.person||"")}">${esc(p.name)}${p.left>0?` <span class="muted">${f.debt==="borrow"||f.debt==="repay"?"nợ":"còn"} ${shortMoney(p.left)}</span>`:""}</button>`).join("")}</div>`:""}
-    <p class="small muted" style="margin:0">Sẽ ghi: <b id="fDebtPrev">${esc(debtNote(f))}</b> · ${f.debt==="borrow"||f.debt==="collect"?"tiền vào ví":"tiền ra khỏi ví"}, không tính vào thu chi.</p>
-  </section>`:""}
+  ${f.debt?(()=>{ const inflow=f.debt==="borrow"||f.debt==="collect", oweSide=f.debt==="borrow"||f.debt==="repay";
+    const ACT={borrow:["inflow","Đi vay","Mượn tiền về"],repay:["outbox","Trả nợ","Trả người cho vay"],lend:["handshake","Cho vay","Đưa tiền cho mượn"],collect:["coins","Thu nợ","Người vay trả lại"]};
+    const ini=n=>{ const w=n.split(/\s+/).filter(x=>/^\p{L}/u.test(x)); return ((w[0]||"?")[0]+(w.length>1?w[w.length-1][0]:"")).toUpperCase(); };
+    return `<section class="card debtbox">
+    <div class="dacts" role="group" aria-label="Loại vay nợ">${Object.entries(ACT).map(([a,[ic,l,d]])=>`<button class="dact ${a==="borrow"||a==="collect"?"in":"out"}" data-debt-act="${a}" aria-pressed="${f.debt===a}">${icoHTML(ic,"sm")}<span><b>${l}</b><small>${d}</small></span></button>`).join("")}</div>
+    <div class="flabel dlabel">${{borrow:"Vay của ai",repay:"Trả nợ cho ai",lend:"Cho ai vay",collect:"Ai trả nợ"}[f.debt]}</div>
+    <label class="pinput">${f.person?`<span class="ico sm av" style="--c:${rankColor(0)}">${esc(ini(f.person))}</span>`:icoHTML("person","sm")}<input id="fPerson" maxlength="80" placeholder="Gõ tên hoặc chọn bên dưới" value="${esc(f.person||"")}" autocomplete="off" enterkeyhint="done"></label>
+    ${dItems.length?`<div class="plist">${dItems.map((p,i)=>`<button class="prow" data-person="${esc(p.name)}" aria-pressed="${strip(p.name)===strip(f.person||"")}"><span class="ico sm av" style="--c:${rankColor(i)}">${esc(ini(p.name))}</span><span class="pn"><b>${esc(p.name)}</b><small>${p.left>0?`${oweSide?"Đang nợ":"Còn phải thu"} <b class="num ${oweSide?"out-c":"in-c"}">${money(p.left)}</b>`:"Đã xong"}</small></span></button>`).join("")}</div>`:""}
+    <div class="dsum ${inflow?"in":"out"}"><span>${inflow?"↓ Tiền vào ví":"↑ Tiền ra khỏi ví"}</span><b id="fDebtPrev">${esc(debtNote(f))}</b><small>Không tính vào thu chi tháng</small></div>
+  </section>`; })():""}
   <section class="card" style="gap:0">
     <div class="selrow" style="border-top:0">${icoHTML("calendar","sm")}<div class="mid"><div class="flabel">Ngày</div><label class="datebox"><span id="fDateTxt">${dateText(f.date)}</span><input type="date" id="fDate" value="${esc(f.date)}" aria-label="Chọn ngày"></label></div></div>
     <div class="selrow">${icoHTML("pen","sm")}<div class="mid"><div class="flabel">Ghi chú</div><input id="fNote" maxlength="200" placeholder="${f.debt?"Thêm ghi chú nếu cần (lãi suất, hạn trả…)":"Ví dụ: chợ sáng"}" value="${esc(f.note)}" autocomplete="off" enterkeyhint="done"><div class="notesugg" id="noteSugg" hidden></div></div></div>
@@ -1590,10 +1607,10 @@ function formView(){
   document.querySelectorAll(".seg.four button").forEach(b=>b.onclick=()=>{ const k=b.dataset.k;
     if (k==="debt"){ if(f.debt) return; f.debt="borrow"; f.kind="income"; f.categoryId=""; f.split=1; formView(); return; }
     if (f.kind===k && !f.debt) return; f.debt=null; f.kind=k; const c=catById(f.categoryId); if(!c || c.kind!==f.kind || debtKind(c)) f.categoryId=""; formView(); });
-  document.querySelectorAll("[data-debt-act]").forEach(b=>b.onclick=()=>{ f.debt=b.dataset.debtAct; f.kind=DEBT_ACT[f.debt][0]; f.categoryId=""; formView(); });
+  document.querySelectorAll("[data-debt-act]").forEach(b=>b.onclick=()=>{ const side=a=>a==="borrow"||a==="repay"; if(side(f.debt)!==side(b.dataset.debtAct)) f.person=""; f.debt=b.dataset.debtAct; f.kind=DEBT_ACT[f.debt][0]; f.categoryId=""; formView(); });
   const fp=$("#fPerson"), dprev=()=>{ const e=$("#fDebtPrev"); if(e) e.textContent=debtNote(f); };
-  if (fp) fp.oninput=()=>{ f.person=fp.value; dprev(); document.querySelectorAll("[data-person]").forEach(x=>x.setAttribute("aria-pressed",strip(x.dataset.person)===strip(fp.value))); };
-  document.querySelectorAll("[data-person]").forEach(b=>b.onclick=()=>{ f.person=b.dataset.person; fp.value=f.person; fp.oninput(); });
+  if (fp){ fp.oninput=()=>{ f.person=fp.value; dprev(); document.querySelectorAll("[data-person]").forEach(x=>x.setAttribute("aria-pressed",strip(x.dataset.person)===strip(fp.value))); }; fp.onchange=()=>formView(); }
+  document.querySelectorAll("[data-person]").forEach(b=>b.onclick=()=>{ f.person=b.dataset.person; formView(); });
   document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ f.amount=Number(b.dataset.q); formView(); });
   $("[data-x]").onclick=()=>{ f.amount=(Number(f.amount)||0)*1000; formView(); };
   const cq=$("#catQ"); if(cq) cq.oninput=()=>{ const w=strip(cq.value).split(/\s+/).filter(Boolean); let n=0;
