@@ -348,7 +348,7 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 /* iPhone: bỏ kiểu mặc định của ô chọn để chữ thẳng hàng với nhãn, mũi tên tự vẽ bên phải */
 .selrow select{-webkit-appearance:none;appearance:none;padding-right:24px;text-indent:0;background:no-repeat right 2px center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a94a0' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")}
 .datebox{position:relative;display:flex;align-items:center;min-height:32px;padding:4px 24px 4px 0;font-weight:600;cursor:pointer;background:no-repeat right 2px center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a94a0' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")}
-.datebox input{position:absolute;inset:0;width:100%;height:100%;opacity:0;-webkit-appearance:none;appearance:none;cursor:pointer}
+.vdate{justify-content:flex-end;min-height:0;padding-top:0;padding-bottom:0;text-align:right} .datebox input{position:absolute;inset:0;width:100%;height:100%;opacity:0;-webkit-appearance:none;appearance:none;cursor:pointer}
 .input,select.input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:11px 12px;min-height:44px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:360px){.catgrid{grid-template-columns:repeat(3,1fr)}}
@@ -1319,21 +1319,23 @@ function voiceSheet(){
     <div class="vfoot"><div class="vneed" id="vNeed" hidden></div><div class="btnrow"><button class="btn ghost" id="vApply" disabled>Sửa thêm</button><button class="btn" id="vSave" disabled>Lưu</button></div></div></div>`;
   document.body.appendChild(box);
   const txt=$("#vText"), st=$("#vStatus"), prev=$("#vPrev"), ap=$("#vApply"), sv=$("#vSave"), need=$("#vNeed"), micb=$("#vMic");
-  let rec=null, parsed=null, pickedCat=null, typedAmt=0, lastText="";
+  let rec=null, parsed=null, pickedCat=null, pickedDate=null, typedAmt=0, lastText="";
   const show=()=>{ if(!box.isConnected) return; const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
-    if (v!==lastText){ pickedCat=null; typedAmt=0; lastText=v; }
+    if (v!==lastText){ pickedCat=null; pickedDate=null; typedAmt=0; lastText=v; }
     parsed=editing?parseEdit(v,base):parseSpoken(v); if(!parsed.amount && typedAmt) parsed.amount=typedAmt; const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
+    if(pickedDate){ parsed.date=pickedDate; if(editing && pickedDate!==base.date && !parsed.chg.includes("ngày")) parsed.chg.push("ngày"); }
     const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
     prev.hidden=false;
     prev.innerHTML=(editing?`<div class="vchg"><span>${parsed.chg.length?"Sẽ sửa":"Chưa nghe ra phần cần sửa"}</span><b>${parsed.chg.length?esc(parsed.chg.join(", ")):"Thử nói lại"}</b></div>`:"")+`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
       <div class="${parsed.amount?"":"miss"}"><span>${parsed.split>1&&parsed.kind!=="transfer"?"Tổng tiền":"Số tiền"}</span>${parsed.amount&&!typedAmt?`<b class="num">${fmtExact(parsed.amount)} đ</b>`:`<input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${typedAmt?fmtExact(typedAmt):""}" aria-label="Số tiền">`}</div>
       ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div class="${c?"":"miss"}"><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"Bắt buộc chọn ↓"}</b></div>`}
-      <div><span>Ngày</span><b>${viDate(parsed.date)}</b></div>
+      <div><span>Ngày</span><label class="datebox vdate"><b>${dateText(parsed.date)}</b><input type="date" id="vDate" value="${parsed.date}" aria-label="Đổi ngày"></label></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
       ${parsed.note?`<div><span>Ghi chú</span><b>${esc(parsed.note)}</b></div>`:""}
       ${parsed.split>1&&parsed.kind!=="transfer"?`<div class="vsplit"><div class="row between"><span>Chia ${parsed.split} tháng</span><b class="num">${parsed.amount?"mỗi tháng ~"+fmt(Math.floor(parsed.amount/parsed.split/1000)*1000)+" đ":""}</b></div>
         ${splitParts(parsed.amount||0,parsed.date,parsed.split,"").map((x,i)=>`<div class="vsr"><span>${i+1}. T${Number(x.date.slice(5,7))}/${x.date.slice(0,4)}</span><span class="muted">ngày ${viDate(x.date).slice(0,5)}</span><b class="num">${parsed.amount?fmt(x.amount)+" đ":"–"}</b></div>`).join("")}</div>`:""}
 `;
+    const vd=$("#vDate"); if(vd) vd.onchange=()=>{ if(vd.value){ pickedDate=vd.value; show(); } };
     const va=$("#vAmt"); if(va){ va.oninput=()=>{ const n=parseAmount(va.value); typedAmt=n; va.value=n?fmtExact(n):""; parsed.amount=n||undefined; va.closest(".miss,div")?.classList.toggle("miss",!n); checkNeed(); }; }
     renderCats(parsed.kind, autoCat, parsed.cands||[]); checkNeed(); };
   // bắt buộc đủ số tiền + hạng mục (+ ví) mới cho lưu; báo rõ còn thiếu gì
