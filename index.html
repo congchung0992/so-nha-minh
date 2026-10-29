@@ -314,7 +314,7 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .vprev > .vsplit{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:8px;margin-top:2px}
 .vsplit .row b{color:var(--muted);font-weight:600}
 .vsr{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:baseline} .vsr span:first-child{color:var(--fg)} .vsr b{min-width:110px;text-align:right}
-.vamt{width:150px;text-align:right;border:1px solid var(--expense);border-radius:10px;padding:4px 8px;background:var(--surface);font-weight:700}
+.vprev > div:has(.vamtbox){align-items:center} .vamtbox{display:inline-flex;align-items:center;gap:4px;font-weight:700} .vamt{width:150px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:4px 8px;background:var(--surface);font-weight:700;color:inherit} .vamt:focus{border-color:var(--accent);outline:none} .miss .vamt{border-color:var(--expense)}
 .vmic{flex:none;align-self:center;width:76px;height:76px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .vmic svg{width:34px;height:34px}
 .vmic.busy{opacity:.6;animation:micpulse 1.2s ease-in-out infinite}
@@ -1322,12 +1322,12 @@ function voiceSheet(){
   let rec=null, parsed=null, pickedCat=null, pickedDate=null, typedAmt=0, lastText="";
   const show=()=>{ if(!box.isConnected) return; const v=txt.value.trim(); ap.disabled=!v; if(!v){ prev.hidden=true; parsed=null; return; }
     if (v!==lastText){ pickedCat=null; pickedDate=null; typedAmt=0; lastText=v; }
-    parsed=editing?parseEdit(v,base):parseSpoken(v); if(!parsed.amount && typedAmt) parsed.amount=typedAmt; const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
+    parsed=editing?parseEdit(v,base):parseSpoken(v); if(typedAmt){ parsed.amount=typedAmt; if(editing && typedAmt!==base.amount && !parsed.chg.includes("số tiền")) parsed.chg.push("số tiền"); } const autoCat=parsed.categoryId; if(pickedCat && catById(pickedCat)?.kind===parsed.kind) parsed.categoryId=pickedCat;
     if(pickedDate){ parsed.date=pickedDate; if(editing && pickedDate!==base.date && !parsed.chg.includes("ngày")) parsed.chg.push("ngày"); }
     const c=catById(parsed.categoryId), w=walletById(parsed.walletId), w2=walletById(parsed.toWalletId);
     prev.hidden=false;
     prev.innerHTML=(editing?`<div class="vchg"><span>${parsed.chg.length?"Sẽ sửa":"Chưa nghe ra phần cần sửa"}</span><b>${parsed.chg.length?esc(parsed.chg.join(", ")):"Thử nói lại"}</b></div>`:"")+`<div><span>Loại</span><b>${parsed.kind==="income"?"Thu tiền":parsed.kind==="transfer"?"Chuyển ví":"Chi tiền"}</b></div>
-      <div class="${parsed.amount?"":"miss"}"><span>${parsed.split>1&&parsed.kind!=="transfer"?"Tổng tiền":"Số tiền"}</span>${parsed.amount&&!typedAmt?`<b class="num">${fmtExact(parsed.amount)} đ</b>`:`<input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${typedAmt?fmtExact(typedAmt):""}" aria-label="Số tiền">`}</div>
+      <div class="${parsed.amount?"":"miss"}"><span>${parsed.split>1&&parsed.kind!=="transfer"?"Tổng tiền":"Số tiền"}</span><label class="vamtbox"><input class="vamt num" id="vAmt" inputmode="numeric" placeholder="Gõ số tiền" value="${parsed.amount?fmtExact(parsed.amount):""}" aria-label="Sửa số tiền"> đ</label></div>
       ${parsed.kind==="transfer"?`<div><span>Từ ví → sang ví</span><b>${esc(w?.name||"?")} → ${esc(w2?.name||"?")}</b></div>`:`<div class="${c?"":"miss"}"><span>Hạng mục</span><b>${c?icoHTML(catIconKey(c),"xs")+esc(c.name):"Bắt buộc chọn ↓"}</b></div>`}
       <div><span>Ngày</span><label class="datebox vdate"><b>${dateText(parsed.date)}</b><input type="date" id="vDate" value="${parsed.date}" aria-label="Đổi ngày"></label></div>
       ${w&&parsed.kind!=="transfer"?`<div><span>Ví</span><b>${esc(w.name)}</b></div>`:""}
@@ -1336,7 +1336,7 @@ function voiceSheet(){
         ${splitParts(parsed.amount||0,parsed.date,parsed.split,"").map((x,i)=>`<div class="vsr"><span>${i+1}. T${Number(x.date.slice(5,7))}/${x.date.slice(0,4)}</span><span class="muted">ngày ${viDate(x.date).slice(0,5)}</span><b class="num">${parsed.amount?fmt(x.amount)+" đ":"–"}</b></div>`).join("")}</div>`:""}
 `;
     const vd=$("#vDate"); if(vd) vd.onchange=()=>{ if(vd.value){ pickedDate=vd.value; show(); } };
-    const va=$("#vAmt"); if(va){ va.oninput=()=>{ const n=parseAmount(va.value); typedAmt=n; va.value=n?fmtExact(n):""; parsed.amount=n||undefined; va.closest(".miss,div")?.classList.toggle("miss",!n); checkNeed(); }; }
+    const va=$("#vAmt"); if(va){ va.oninput=()=>{ const n=parseAmount(va.value); typedAmt=n; va.value=n?fmtExact(n):""; parsed.amount=n||undefined; va.closest(".miss,div")?.classList.toggle("miss",!n); checkNeed(); }; va.onchange=()=>show(); va.onfocus=()=>va.select(); }
     renderCats(parsed.kind, autoCat, parsed.cands||[]); checkNeed(); };
   // bắt buộc đủ số tiền + hạng mục (+ ví) mới cho lưu; báo rõ còn thiếu gì
   const buildForm=()=>{ const f=S.form||blankForm();
