@@ -1569,7 +1569,7 @@ function formView(){
     <div class="quick">${[20000,50000,100000,200000,500000,1000000].map(n=>`<button class="chip" data-q="${n}">${fmt(n)}</button>`).join("")}<button class="chip" data-x="000">×1.000</button></div>
   </section>
   ${f.debt?(()=>{ const inflow=f.debt==="borrow"||f.debt==="collect", oweSide=f.debt==="borrow"||f.debt==="repay";
-    const ACT={borrow:["inflow","Đi vay","Mượn tiền về"],repay:["outbox","Trả nợ","Trả người cho vay"],lend:["handshake","Cho vay","Đưa tiền cho mượn"],collect:["coins","Thu nợ","Người vay trả lại"]};
+    const ACT={borrow:["salary","Đi vay","Mượn tiền về"],repay:["lend","Trả nợ","Trả người cho vay"],lend:["handshake","Cho vay","Đưa tiền cho mượn"],collect:["coins","Thu nợ","Người vay trả lại"]};
     const ini=n=>{ const w=n.split(/\s+/).filter(x=>/^\p{L}/u.test(x)); return ((w[0]||"?")[0]+(w.length>1?w[w.length-1][0]:"")).toUpperCase(); };
     return `<section class="card debtbox">
     <div class="dacts" role="group" aria-label="Loại vay nợ">${Object.entries(ACT).map(([a,[ic,l,d]])=>`<button class="dact ${a==="borrow"||a==="collect"?"in":"out"}" data-debt-act="${a}" aria-pressed="${f.debt===a}">${icoHTML(ic,"sm")}<span><b>${l}</b><small>${d}</small></span></button>`).join("")}</div>
