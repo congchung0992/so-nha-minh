@@ -100,6 +100,8 @@ h2{font-weight:700;font-size:var(--fs-lg);margin:0;text-wrap:balance}
 .balance .nw .nwh{display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-md);letter-spacing:.07em;font-weight:800;color:var(--muted);padding-top:4px}
 .balance .nw .nwh b{font-size:var(--fs-md);letter-spacing:0;color:var(--fg)}
 .balance .nw .nwh.debt{border-top:1px dashed var(--line);padding-top:10px;margin-top:4px}
+.balance .nw .nwh.fund{border-top:1px dashed var(--line);padding-top:10px;margin-top:4px;color:#b07a12}
+.checkrow{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:var(--surface-2);cursor:pointer} .checkrow input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none} .checkrow span{display:flex;flex-direction:column;gap:2px} .checkrow small{font-size:var(--fs-md)}
 .balance .nw .nwbtn span:first-child{padding-left:10px}
 .wlhead{background:none;border:0;width:100%;text-align:left;padding:0;color:inherit}
 .wlhead .chev{font-size:18px}
@@ -934,8 +936,8 @@ function homeView(){
   // ví "đầu tư / tiết kiệm / chứng khoán" tách riêng khỏi tiền mặt; bỏ qua ví trống chưa dùng
   const isInvest = w => w.type==="saving" || /dau tu|tiet kiem|chung khoan|dau tu/.test(strip(w.name));
   const used = w => (bal[w.id]||0)!==0 || S.txs.some(t=>t.walletId===w.id||t.toWalletId===w.id);
-  const ws = sortedWallets().filter(used);
-  const cashW = ws.filter(w=>!isInvest(w)), invW = ws.filter(isInvest);
+  const ws = sortedWallets().filter(used), fundW = ws.filter(w=>w.excluded);   // quỹ riêng (vd tiền để dành cho con): không tính vào tài sản ròng
+  const cashW = ws.filter(w=>!w.excluded&&!isInvest(w)), invW = ws.filter(w=>!w.excluded&&isInvest(w));
   const sum = arr => arr.reduce((s,w)=>s+(bal[w.id]||0),0);
   const cash=sum(cashW), inv=sum(invW), have=cash+inv+owed, net=have-owe;
   const line = (attr,label,v,cls,sign="") => `<button class="nwbtn" ${attr}><span>${label}</span><b class="num ${cls||(v<0?"out-c":"")}">${sign}${money(v)}</b><span class="chev">›</span></button>`;
@@ -950,6 +952,8 @@ function homeView(){
       ${line(`data-debt="owed"`,"Cho vay chưa thu",owed,"in-c",owed?"+":"")}
       <div class="nwh debt"><span>ĐANG NỢ</span><b class="num out-c">${owe?"−"+money(owe):"0 đ"}</b></div>
       ${line(`data-debt="owe"`,"Đi vay chưa trả",owe,"out-c",owe?"−":"")}
+      ${fundW.length?`<div class="nwh fund"><span>QUỸ RIÊNG · không tính</span><b class="num">${money(sum(fundW))}</b></div>
+      ${fundW.map(w=>line(`data-debt="w:${esc(w.id)}"`,esc(w.name),bal[w.id]||0)).join("")}`:""}
     </div>
   </section>
   ${spendTrendCard(ym)}`;
@@ -1812,6 +1816,7 @@ function walletsView(){
       <div class="field"><label for="wType">Loại</label><select class="input" id="wType">${WTYPES.map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select></div>
       <div class="field"><label for="wInit">Số dư ban đầu (đ)</label><input class="input num" id="wInit" inputmode="numeric" placeholder="0"></div>
     </div>
+    <label class="checkrow"><input type="checkbox" id="wExcl"><span><b>Quỹ riêng, không tính vào tài sản ròng</b><small class="muted">Ví dụ tiền để dành cho con, quỹ giữ hộ. Vẫn ghi chép bình thường, chỉ tách riêng ở Tổng quan.</small></span></label>
     <div class="err" id="wErr" role="alert"></div>
     <div class="btnrow"><button class="btn ghost" id="wReset" hidden>Huỷ sửa</button><button class="btn" id="wSave">Thêm ví</button></div>
     <div id="wMerge" hidden style="display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px">
@@ -1824,9 +1829,9 @@ function walletsView(){
   let editing=null;
   const wi=$("#wInit"); wi.oninput=()=>{ const n=parseAmount(wi.value); wi.value=n?fmtExact(n):""; };
   const mg=$("#wMerge"), mgTo=$("#wMergeTo"), mgGo=$("#wMergeGo");
-  const reset=()=>{ editing=null; $("#wTitle").textContent="Thêm ví"; $("#wSave").textContent="Thêm ví"; $("#wReset").hidden=true; $("#wName").value=""; wi.value=""; $("#wType").value="cash"; mg.hidden=true; };
+  const reset=()=>{ editing=null; $("#wTitle").textContent="Thêm ví"; $("#wSave").textContent="Thêm ví"; $("#wReset").hidden=true; $("#wName").value=""; wi.value=""; $("#wType").value="cash"; $("#wExcl").checked=false; mg.hidden=true; };
   $("#wReset").onclick=reset;
-  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const w=walletById(b.dataset.edit); editing=w.id; $("#wTitle").textContent="Sửa ví “"+w.name+"”"; $("#wSave").textContent="Lưu ví"; $("#wReset").hidden=false; $("#wName").value=w.name; wi.value=w.initial?fmtExact(w.initial):""; $("#wType").value=w.type||"cash";
+  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{ const w=walletById(b.dataset.edit); editing=w.id; $("#wTitle").textContent="Sửa ví “"+w.name+"”"; $("#wSave").textContent="Lưu ví"; $("#wReset").hidden=false; $("#wName").value=w.name; wi.value=w.initial?fmtExact(w.initial):""; $("#wType").value=w.type||"cash"; $("#wExcl").checked=!!w.excluded;
     const others=ws.filter(x=>x.id!==w.id); mg.hidden=!others.length;
     const cnt=id=>S.txs.filter(t=>t.walletId===id||t.toWalletId===id).length;
     mgTo.innerHTML=others.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${cnt(x.id)} khoản)</option>`).join("");
@@ -1847,7 +1852,7 @@ function walletsView(){
   $("#wSave").onclick=async()=>{ const name=$("#wName").value.trim(); const err=$("#wErr"); err.textContent="";
     if(!name){ err.textContent="Nhập tên ví."; return; }
     if(S.wallets.some(w=>w.id!==editing && strip(w.name)===strip(name))){ err.textContent="Đã có ví trùng tên."; return; }
-    const type=$("#wType").value; const old=editing&&walletById(editing), body={name,type,icon: old&&old.type===type&&old.icon ? old.icon : (walletIconByName(name)||type), initial:parseAmount(wi.value)};   /* giữ icon riêng của ví khi sửa */
+    const type=$("#wType").value; const old=editing&&walletById(editing), body={name,type,icon: old&&old.type===type&&old.icon ? old.icon : (walletIconByName(name)||type), initial:parseAmount(wi.value), excluded:$("#wExcl").checked};   /* giữ icon riêng của ví khi sửa */
     try{ if(editing){ await S.db.doc("wallets/"+editing).set({...strip0(walletById(editing)),...body}); toast("Đã lưu ví"); } else { await S.db.collection("wallets").add({...body,order:(Math.max(0,...S.wallets.map(w=>w.order||0))+1),createdAt:Date.now()}); toast("Đã thêm ví"); } reset(); }catch(e){handleWriteErr(e)} };
 }
 
@@ -2597,7 +2602,7 @@ const lsSet = (k,v) => { try{ v==null?localStorage.removeItem(k):localStorage.se
 
 /* ánh xạ cột DB ↔ trường trong app */
 const MAP = {
-  wallets:   {name:"name",type:"type",icon:"icon",initial:"initial",order:"sort"},
+  wallets:   {name:"name",type:"type",icon:"icon",initial:"initial",order:"sort",excluded:"excluded"},
   categories:{name:"name",kind:"kind",icon:"icon",order:"sort",parent:"parent",fixed:"fixed"},
   tx:        {kind:"kind",amount:"amount",walletId:"wallet_id",toWalletId:"to_wallet_id",categoryId:"category_id",date:"date",note:"note",ref:"ref",src:"src",by:"created_by",updatedBy:"updated_by"}
 };
