@@ -279,6 +279,7 @@ nav.tabs .add span.plus svg{width:26px;height:26px;stroke-width:2.6}
 .tcol .bars i{display:block;width:38%;max-width:12px;border-radius:4px 4px 0 0;min-height:2px}
 .bi{background:color-mix(in srgb,var(--income) 75%,transparent)} .be{background:var(--expense)}
 .tcol .tl{height:var(--lh);line-height:var(--lh);color:var(--muted);font-weight:600;font-size:min(var(--fs-md),3.4vw)}
+.tcol .tv{height:20px;line-height:20px;font-weight:700;font-size:min(var(--fs-md),3.4vw);letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap} .tcol .tv.in-c,.tcol .tv.out-c{opacity:.95}
 .tcol.cur{background:var(--surface-2)} .tcol.cur .tl{color:var(--fg);font-weight:800}
 .tavg{position:absolute;left:0;right:0;border-top:2px dashed color-mix(in srgb,var(--fg) 45%,transparent);pointer-events:none}
 .tlegend{display:flex;gap:14px;color:var(--muted);flex-wrap:wrap} .tlegend i{display:inline-block;width:12px;height:10px;border-radius:3px;margin-right:5px;vertical-align:0}
@@ -1039,10 +1040,11 @@ function spendTrendCard(ym){
       <div class="tsum2"><span>Thu <b class="num in-c">${shortMoney(cur.inc)}</b></span><span>Còn lại <b class="num ${cur.inc-cur.exp<0?"out-c":"in-c"}">${cur.inc-cur.exp<0?"−":""}${shortMoney(Math.abs(cur.inc-cur.exp))}</b></span></div></div>`;
   // 2) biểu đồ cột thu / chi + đường chi trung bình
   const max=Math.max(1,...per.map(p=>Math.max(p.inc,p.exp)));
+  const trN=v=>{ const t=v/1e6; return !v?"–":t>=10?String(Math.round(t)):t.toFixed(1).replace(".",",").replace(",0",""); };   // số dưới cột, đơn vị triệu
   const cols = per.map(p=>`<button class="tcol${p.m===ym?" cur":""}" data-trend-m="${p.m}" aria-label="${monthLabel(p.m)}: thu ${fmt(p.inc)}, chi ${fmt(p.exp)}">
-      <span class="bars"><i class="bi" style="height:${p.inc/max*100}%"></i><i class="be" style="height:${p.exp/max*100}%"></i></span><span class="tl">T${Number(p.m.slice(5))}</span></button>`).join("");
-  const chart = `<div class="tchart"><div class="tcols">${cols}<span class="tavg" style="bottom:${28+avgExp/max*140}px"></span></div>
-    <div class="tlegend"><span><i class="bi"></i>Thu</span><span><i class="be"></i>Chi</span><span><i class="ba"></i>Chi trung bình</span></div></div>`;
+      <span class="bars"><i class="bi" style="height:${p.inc/max*100}%"></i><i class="be" style="height:${p.exp/max*100}%"></i></span><span class="tl">T${Number(p.m.slice(5))}</span><span class="tv in-c">${trN(p.inc)}</span><span class="tv out-c">${trN(p.exp)}</span></button>`).join("");
+  const chart = `<div class="tchart"><div class="tcols">${cols}<span class="tavg" style="bottom:${76+avgExp/max*140}px"></span></div>
+    <div class="tlegend"><span><i class="bi"></i>Thu</span><span><i class="be"></i>Chi</span><span>(triệu)</span><span><i class="ba"></i>Chi trung bình</span></div></div>`;
   // 3) tổng 12 tháng
   const diff=totInc-totExp;
   const totals = `<div class="ttot"><div><span>Tổng thu</span><b class="num in-c">${shortMoney(totInc)}</b></div><div><span>Tổng chi</span><b class="num out-c">${shortMoney(totExp)}</b></div><div><span>${diff<0?"Hụt":"Dư"}</span><b class="num ${diff<0?"out-c":"in-c"}">${shortMoney(Math.abs(diff))}</b></div></div>`;
